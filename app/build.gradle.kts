@@ -62,6 +62,7 @@ dependencies {
     // AndroidX core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -79,8 +80,18 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.common)
 
+    // CameraX for the QR scanner
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+
     // QR scanning (decode side; encoding still done in dashboard)
     implementation(libs.zxing.core)
+
+    // Coroutines (used by ConnectionGuard, STT events, audio routing)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
 
     // XREAL Nebula SDK (placeholder — drop the official AAR into app/libs/ once
     // downloaded from XREAL's developer portal; uncomment the line below)

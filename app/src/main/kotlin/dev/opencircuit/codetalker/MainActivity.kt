@@ -1,6 +1,7 @@
 package dev.opencircuit.codetalker
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -14,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import dev.opencircuit.codetalker.input.ButtonRouter
+import dev.opencircuit.codetalker.input.HardwareKeys
 import dev.opencircuit.codetalker.net.DaemonClient
 import dev.opencircuit.codetalker.net.Pairing
 import dev.opencircuit.codetalker.net.PairingFlow
@@ -23,11 +26,19 @@ import dev.opencircuit.codetalker.ui.SessionListScreen
 /**
  * CCT-31 — Codetalker AR Companion entry point.
  *
- * Phase 5c routes between PairingScreen (no token yet) and SessionListScreen
- * (token persisted). Phase 8 swaps SessionListScreen for the AR HUD root.
+ * Owns the long-lived singletons: PairingFlow, ButtonRouter, HardwareKeys.
+ * dispatchKeyEvent is overridden to feed Beam Pro side button + volume
+ * rocker events into HardwareKeys → ButtonRouter.
+ *
+ * Phase 8 will swap SessionListScreen for the AR HUD root; Compose UI
+ * here remains as the before-glasses config surface.
  */
 class MainActivity : ComponentActivity() {
     private lateinit var pairingFlow: PairingFlow
+    private val buttonRouter = ButtonRouter()
+    private val hardwareKeys = HardwareKeys(onInput = { input ->
+        buttonRouter.handle(input)
+    })
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +53,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Beam Pro side button + volume rocker capture. HardwareKeys returns
+     * true when it consumes an event so the system doesn't ring the
+     * volume audio or trigger media playback alongside the AR app.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (hardwareKeys.handle(event)) return true
+        return super.dispatchKeyEvent(event)
     }
 }
 
