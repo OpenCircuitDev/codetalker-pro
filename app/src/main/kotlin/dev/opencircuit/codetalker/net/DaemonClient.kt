@@ -55,10 +55,20 @@ class DaemonClient(
             val arr = JSONArray(body)
             return List(arr.length()) { i ->
                 val o = arr.getJSONObject(i)
+                val char = o.optJSONObject("attached_character")?.let { c ->
+                    AttachedCharacter(
+                        id = c.optString("id", ""),
+                        displayName = c.optString("display_name", c.optString("id", "?")),
+                        persona = c.optString("persona", "").ifBlank { null },
+                        voiceRef = c.optString("voice_ref", "").ifBlank { null },
+                        meshPath = c.optString("mesh_path", "").ifBlank { null },
+                    )
+                }
                 SessionLite(
                     sessionId = o.getString("session_id"),
                     displayName = o.optString("display_name", o.getString("session_id").take(8)),
                     isLive = o.optBoolean("is_live", false),
+                    attachedCharacter = char,
                 )
             }
         }
@@ -112,4 +122,31 @@ data class SessionLite(
     val sessionId: String,
     val displayName: String,
     val isLive: Boolean,
+    /**
+     * CCT-31: which character is attached to this session on the desktop.
+     * When non-null, the session's TTS is rendered through this character's
+     * voice (including custom-cloned voices), and the AR companion should
+     * surface the character's name/persona/avatar to the listener.
+     */
+    val attachedCharacter: AttachedCharacter? = null,
+)
+
+/**
+ * Mirror of the AttachedCharacter JSON shape returned by
+ * /api/companion/sessions. Phase 25a/b/c characters from the desktop:
+ * voice cloning lands in voiceRef, 3D mesh path lands in meshPath.
+ */
+data class AttachedCharacter(
+    val id: String,
+    val displayName: String,
+    /** "methodical" | "warm" | "technical" | "plain" | "sarcastic" | "energetic" | null */
+    val persona: String?,
+    /** voice_ref the daemon uses for TTS — char-<id> for cloned voices,
+     *  library voice id (e.g. en_US-amy-medium) for non-cloned. */
+    val voiceRef: String?,
+    /** Absolute path on the daemon host. AR companion can stream it back
+     *  through a future /api/companion/mesh-frame endpoint when Phase 8
+     *  (AR HUD) needs to render the avatar mesh. v1 just shows the
+     *  character's display_name + persona color. */
+    val meshPath: String?,
 )
