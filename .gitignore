@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android SDK / NDK
+*.apk
+*.ap_
+*.aab
+*.dex
+proguard/
+
+# Kotlin
+.kotlin/
+
+# Local AARs (XREAL Nebula SDK is large; download separately)
+app/libs/*.aar
+app/libs/*.jar
+!app/libs/.gitkeep
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

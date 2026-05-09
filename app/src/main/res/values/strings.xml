@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Codetalker</string>
+    <string name="pair_title">Pair with codetalker daemon</string>
+    <string name="pair_scan_qr">Scan the QR code from the dashboard\'s Preferences panel</string>
+    <string name="pair_manual_url">Or enter daemon URL manually</string>
+    <string name="pair_manual_token">Pairing token</string>
+    <string name="pair_save">Save</string>
+    <string name="hud_no_session">No active session</string>
+    <string name="hud_listening">Listening…</string>
+    <string name="hud_connecting">Connecting…</string>
+    <string name="hud_offline">Daemon unreachable</string>
+    <string name="menu_title">Sessions</string>
+    <string name="menu_show_screen">Show screen</string>
+    <string name="menu_hide_screen">Hide screen</string>
+</resources>

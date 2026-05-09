@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Phase 27 surface palette ported from React tokens.css. Keeping the same
+      hexes so HUD overlays look continuous with the dashboard.
+    -->
+    <style name="Theme.Codetalker" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="l">#0a0b10</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">#0a0b10</item>
+        <item name="android:windowBackground">@color/surface_0</item>
+        <item name="android:colorBackground">@color/surface_0</item>
+        <item name="android:textColorPrimary">@color/text_1</item>
+    </style>
+</resources>

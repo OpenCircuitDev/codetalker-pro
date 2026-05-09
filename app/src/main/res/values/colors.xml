@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phase 27 surface palette, ported verbatim from React tokens.css -->
+    <color name="surface_0">#0a0b10</color>
+    <color name="surface_1">#11141c</color>
+    <color name="surface_2">#171b26</color>
+    <color name="surface_3">#1f2533</color>
+    <color name="text_1">#e6e8ee</color>
+    <color name="text_2">#aab1c0</color>
+    <color name="text_3">#6e7585</color>
+    <color name="accent_live">#34d399</color>
+    <color name="accent_muted">#fb7185</color>
+    <color name="accent_activity">#a78bfa</color>
+    <color name="accent_brand">#22d3ee</color>
+    <color name="accent_warn">#fbbf24</color>
+</resources>
