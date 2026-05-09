@@ -20,6 +20,7 @@ import dev.opencircuit.codetalker.input.HardwareKeys
 import dev.opencircuit.codetalker.net.DaemonClient
 import dev.opencircuit.codetalker.net.Pairing
 import dev.opencircuit.codetalker.net.PairingFlow
+import dev.opencircuit.codetalker.service.CompanionForegroundService
 import dev.opencircuit.codetalker.ui.PairingScreen
 import dev.opencircuit.codetalker.ui.SessionListScreen
 
@@ -43,6 +44,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pairingFlow = PairingFlow(this)
+
+        // CCT-31 Phase 10a: keep audio + SSE alive when the app backgrounds.
+        // Only start the service if the user has paired — no point holding a
+        // foreground notification when there's no daemon to talk to yet.
+        if (pairingFlow.current() != null) {
+            CompanionForegroundService.start(this)
+        }
+
         setContent {
             MaterialTheme {
                 Surface(
