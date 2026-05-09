@@ -30,6 +30,7 @@ androidx-test-ext = "1.2.1"
 espresso-core = "3.6.1"
 mockwebserver = "4.12.0"
 mockk = "1.13.13"
+org-json = "20231013"
 
 [libraries]
 # AndroidX core
@@ -62,6 +63,9 @@ androidx-test-ext = { group = "androidx.test.ext", name = "junit", version.ref =
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso-core" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "mockwebserver" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+# org.json is bundled with Android but stubbed out in JVM unit tests; this
+# Maven artifact gives tests a real implementation of the same API.
+org-json = { group = "org.json", name = "json", version.ref = "org-json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

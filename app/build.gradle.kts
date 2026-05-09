@@ -90,6 +90,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.mockk)
+    // org.json is bundled with Android the OS but stubbed in JVM unit tests.
+    // This Maven artifact provides the real implementation for tests.
+    testImplementation(libs.org.json)
 
     androidTestImplementation(libs.androidx.test.ext)
     androidTestImplementation(libs.espresso.core)

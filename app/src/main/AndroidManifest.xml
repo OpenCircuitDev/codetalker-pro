@@ -26,12 +26,15 @@
 
     <application
         android:label="@string/app_name"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Codetalker"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
+        <!--
+          Launcher icons (mipmap/ic_launcher, mipmap/ic_launcher_round) will
+          land in Phase 10 (polish + branding). Until then, Android falls back
+          to the default system icon, which is fine for development builds.
+        -->
 
         <!--
           usesCleartextTraffic=true allows http:// to LAN IPs and Tailnet
