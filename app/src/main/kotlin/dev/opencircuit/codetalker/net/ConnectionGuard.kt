@@ -47,15 +47,23 @@ object RetryPolicy {
      * Returns the delay in milliseconds before retry #(attempt+1).
      * attempt = 0 means "first retry after the initial failure."
      *
-     * TODO(user): replace this body with your chosen policy. The default
-     * here is a placeholder exponential backoff capped at 30s with ±20%
-     * jitter, but the comments above describe three valid alternatives.
+     * v1 default: PATIENT cadence — 2s, 5s, 15s, 45s, then 60s steady.
+     * Why: Beam Pro battery (~1500mAh) is the binding constraint, and the
+     * HUD already shows "Daemon unreachable" so a slower cadence is just
+     * "longer-visible bad state," never silent. Tailscale takes ~3s to
+     * re-establish after a network change, so the first retry waits long
+     * enough to give the VPN a chance to reconnect on its own.
+     *
+     * Easy to swap: replace this body with the AGGRESSIVE or WIFI-AWARE
+     * shape from the docblock above. RetryPolicyTest pins the contract.
      */
     fun retryDelayMs(attempt: Int): Long {
-        // Placeholder default — exponential backoff capped at 30s, ±20% jitter.
-        val baseMs = min(1000L * (1L shl attempt), 30_000L)
-        val jitter = Random.nextDouble(0.8, 1.2)
-        return (baseMs * jitter).toLong()
+        val ladder = longArrayOf(2_000L, 5_000L, 15_000L, 45_000L)
+        val baseMs = if (attempt < ladder.size) ladder[attempt] else 60_000L
+        // ±15% jitter so we don't thunder when the daemon comes back online
+        // (multiple companion clients hitting the daemon simultaneously).
+        val jitter = Random.nextDouble(0.85, 1.15)
+        return (baseMs * jitter).toLong().coerceAtMost(60_000L)
     }
 }
 

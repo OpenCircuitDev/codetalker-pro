@@ -74,12 +74,14 @@ Phase 5 tests cover `DaemonClient` (8 tests), `PairingFlow` (TBD), and `RetryPol
 | Phase | Status | Verifiable without hardware? |
 |---|---|---|
 | 5a — Project scaffold | ✅ shipped | Yes — Gradle sync + build |
-| 5b — DaemonClient + PairingFlow + ConnectionGuard | ✅ shipped | Yes — unit tests with MockWebServer |
-| 5c — Pairing Activity (QR scan) | 🔜 next | Yes — emulator |
-| 6 — Button router + STT | pending | Partial — emulator for state machine; Beam Pro for hardware keys |
-| 7 — TTS playback | pending | Yes — emulator with mock audio source |
-| 8 — AR HUD + menu | pending | **No** — needs Nebula SDK + glasses |
-| 9 — Screen mirror | pending | Partial — emulator for MJPEG decode; glasses for visual |
+| 5b — DaemonClient + PairingFlow + ConnectionGuard (patient retry policy) | ✅ shipped | Yes — 12 unit tests via MockWebServer |
+| 5c — Pairing UI (manual entry) + SessionList placeholder + Activity routing | ✅ shipped | Yes — emulator (QR scan deferred to 5c-polish) |
+| 6 — ButtonRouter state machine + STTRecorder wrapper | ✅ shipped | State machine: yes (11 unit tests). STT: partial (Android emulator can mock; Beam Pro hardware-key capture needs device) |
+| 7 — TTSPlayer (ExoPlayer + auth-header HTTP source) | ✅ shipped | Yes — emulator with daemon WAV stream |
+| 5c-polish — QR scanning via CameraX + ZXing | pending | Yes — emulator with synthetic QR |
+| 6-polish — Beam Pro hardware-key capture | pending | **No** — needs Beam Pro |
+| 8 — AR HUD + menu (Nebula SDK) | pending | **No** — needs Nebula SDK + glasses |
+| 9 — Screen mirror (MJPEG decode → AR plane) | pending | Partial — emulator for decode; glasses for visual |
 | 10 — Polish + Tailscale recipe | pending | Yes for code; no for end-to-end behavior |
 
 ## Open user contribution: `RetryPolicy.retryDelayMs`
