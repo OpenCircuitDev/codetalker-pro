@@ -27,14 +27,17 @@
 
     <application
         android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Codetalker"
+        android:theme="@style/Theme.Codetalker.Splash"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <!--
-          Launcher icons (mipmap/ic_launcher, mipmap/ic_launcher_round) will
-          land in Phase 10 (polish + branding). Until then, Android falls back
-          to the default system icon, which is fine for development builds.
+          CCT-32 Task C.1: adaptive launcher icon (cyan→violet orb with
+          waveform glyph) lives in res/mipmap-anydpi-v26/. Monochrome
+          variant covers Android 13+ themed icons. No PNG fallbacks
+          needed — minSdk=31 (Android 12) always supports adaptive XML.
         -->
 
         <!--

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CCT-32 Task C.1 — Adaptive launcher icon background colour.
+
+  This is the gradient anchor for the icon: a deep midnight surface that
+  the foreground waveform glyph and the cyan-to-violet aura ride on top
+  of. Keeping this as a single colour (not a gradient) lets the launcher
+  apply OEM masking shapes (circle / squircle / teardrop) without fighting
+  banding artefacts.
+-->
+<resources>
+    <color name="ic_launcher_background">#0A0B10</color>
+</resources>

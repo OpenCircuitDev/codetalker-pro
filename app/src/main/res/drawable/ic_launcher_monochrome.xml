@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CCT-32 Task C.1 — Themed-icon monochrome variant (Android 13+).
+
+  When the user enables themed icons, the launcher tints THIS drawable
+  with the system accent. So we provide silhouettes only — no colour
+  beyond solid white, which the system multiplies with the theme.
+
+  Same shapes as ic_launcher_foreground but flattened to a single white
+  layer with the bars cut OUT of the orb (so the system tint shows
+  through them as the user's accent colour).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Orb silhouette with waveform bars carved out via even-odd fill. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,54 m-30,0 a30,30 0 1,1 60,0 a30,30 0 1,1 -60,0
+                          M38,50 h4 v8 h-4 z
+                          M46,46 h4 v16 h-4 z
+                          M54,42 h4 v24 h-4 z
+                          M62,46 h4 v16 h-4 z
+                          M70,50 h4 v8 h-4 z"/>
+</vector>

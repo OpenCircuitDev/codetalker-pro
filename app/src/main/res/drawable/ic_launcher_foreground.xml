@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CCT-32 Task C.1 — Adaptive icon foreground.
+
+  108dp canvas with 18dp safe-margin (icon mask hides the outermost ring on
+  some launchers). Composition:
+    1. Cyan→violet radial gradient orb (the brand mark).
+    2. Five-bar waveform glyph centred on the orb (codetalker speaks).
+
+  Both elements live well inside the 72×72 safe zone so launcher masks
+  (circle / squircle / teardrop) clip the surrounding aura, not the glyph.
+
+  Cyan #22D3EE / Violet #A855F7 are the same Phase 27 palette tokens used
+  by the dashboard and HUD overlay — keeps the brand continuous from
+  desktop to companion to glasses.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer aura — soft cyan halo, sits in the 12dp bleed area. -->
+    <path
+        android:pathData="M54,54 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0"
+        android:fillAlpha="0.18">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="44"
+                android:startColor="#22D3EE"
+                android:endColor="#000000"/>
+        </aapt:attr>
+    </path>
+
+    <!-- Main orb — cyan→violet gradient. Sits inside the 36dp safe zone. -->
+    <path
+        android:pathData="M54,54 m-30,0 a30,30 0 1,1 60,0 a30,30 0 1,1 -60,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="24"
+                android:startY="24"
+                android:endX="84"
+                android:endY="84"
+                android:startColor="#22D3EE"
+                android:endColor="#A855F7"/>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner shadow rim (depth) -->
+    <path
+        android:pathData="M54,54 m-30,0 a30,30 0 1,1 60,0 a30,30 0 1,1 -60,0
+                          M54,54 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0"
+        android:fillColor="#0A0B10"
+        android:fillAlpha="0.15"
+        android:fillType="evenOdd"/>
+
+    <!-- Waveform glyph — 5 vertical bars centred at (54,54).
+         Bar widths 4dp, gaps 4dp, varying heights to suggest speech. -->
+    <path
+        android:pathData="M38,50 h4 v8 h-4 z"
+        android:fillColor="#FFFFFF"/>
+    <path
+        android:pathData="M46,46 h4 v16 h-4 z"
+        android:fillColor="#FFFFFF"/>
+    <path
+        android:pathData="M54,42 h4 v24 h-4 z"
+        android:fillColor="#FFFFFF"/>
+    <path
+        android:pathData="M62,46 h4 v16 h-4 z"
+        android:fillColor="#FFFFFF"/>
+    <path
+        android:pathData="M70,50 h4 v8 h-4 z"
+        android:fillColor="#FFFFFF"/>
+</vector>
