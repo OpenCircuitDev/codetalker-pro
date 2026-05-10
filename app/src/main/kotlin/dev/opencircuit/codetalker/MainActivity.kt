@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,6 +22,7 @@ import dev.opencircuit.codetalker.net.PairingFlow
 import dev.opencircuit.codetalker.service.CompanionForegroundService
 import dev.opencircuit.codetalker.ui.PairingScreen
 import dev.opencircuit.codetalker.ui.SessionListScreen
+import dev.opencircuit.codetalker.ui.theme.CodetalkerTheme
 
 /**
  * CCT-31 — Codetalker AR Companion entry point.
@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
+            CodetalkerTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize().background(Color(0xFF0A0B10)),
                     color = Color(0xFF0A0B10),
