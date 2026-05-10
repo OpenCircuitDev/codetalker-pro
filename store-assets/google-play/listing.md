@@ -94,11 +94,29 @@ Licenses for the full breakdown).
 
 ## Promotional text (max 170 chars)
 
+Final, locked v0.1.0 wording:
+
 ```
 Hands-free voice + AR for your local codetalker assistant. Pair, tap to talk, hear replies through earbuds while you work. No cloud, no account, your data.
 ```
 
 (Char count: 165.)
+
+## Key features bullets (locked for v0.1.0 store rotation)
+
+These ride beneath the screenshots in the Play listing:
+
+1. **Hands-free voice loop.** Side button → talk → listen.
+2. **Local-first.** Pairs over LAN or Tailnet. No account.
+3. **Per-session controls.** Mode, voice, cadence, character, markup
+   on a single detail screen.
+4. **Character-aware narration.** Cloned voices come along for the
+   ride.
+5. **AR HUD overlay.** Live captions render on Air 2 Pro glasses.
+6. **Lifecycle hardened.** Survives lock screen, network changes, and
+   reboots.
+7. **Crash reports off by default.** Opt-in only; never sends audio
+   or transcripts.
 
 ## Screenshots — phone (required: at least 2, max 8)
 

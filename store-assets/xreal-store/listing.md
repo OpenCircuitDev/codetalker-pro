@@ -13,11 +13,23 @@ codetalker companion
 
 ## Tagline (max 60 chars)
 
+Final, locked v0.1.0 wording:
+
 ```
 Hands-free voice + AR for your local codetalker daemon.
 ```
 
 (Char count: 56.)
+
+## Key features bullets (locked for v0.1.0)
+
+1. **Side button is push-to-talk.** Native Beam Pro hardware integration.
+2. **Air 2 Pro HUD.** Live captions over the world.
+3. **Local-first.** No account, no cloud, your data.
+4. **Per-session controls.** Mode, voice, cadence, character, markup.
+5. **Foreground service.** Audio survives screen-off and lock.
+6. **Boot autostart.** Optional opt-in for always-ready glasses.
+7. **Crash reports opt-in only.** No PII ever leaves your device.
 
 ## Short description (max 200 chars)
 
