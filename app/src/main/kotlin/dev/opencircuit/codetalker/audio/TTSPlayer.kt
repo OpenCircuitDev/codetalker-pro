@@ -31,11 +31,30 @@ class TTSPlayer(
     context: Context,
     private val daemonClient: DaemonClient,
     private val pairingToken: String,
+    private val audioFocusManager: AudioFocusManager = AudioFocusManager.forContext(context),
 ) {
     private val exoPlayer: ExoPlayer = ExoPlayer.Builder(context).build()
 
-    /** Subscribe to a session's audio stream and start playing. */
+    /**
+     * Subscribe to a session's audio stream and start playing.
+     *
+     * CCT-32 Task A.7: requests audio focus before play; pauses on
+     * transient focus loss (incoming call, navigation prompt) and
+     * resumes on focus gain. Permanent loss stops playback.
+     */
     fun playSession(sessionId: String) {
+        val granted = audioFocusManager.requestFocus(
+            onPause = { exoPlayer.playWhenReady = false },
+            onResume = { exoPlayer.playWhenReady = true },
+            onStop = {
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
+            },
+        )
+        if (!granted) {
+            // No focus — bail rather than play over another app.
+            return
+        }
         val url = daemonClient.audioStreamUrl(sessionId)
         val mediaItem = MediaItem.fromUri(url)
 
@@ -64,10 +83,12 @@ class TTSPlayer(
     fun stop() {
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
+        audioFocusManager.releaseFocus()
     }
 
     fun release() {
         exoPlayer.release()
+        audioFocusManager.releaseFocus()
     }
 
     /** True while audio is actively rendering. */
