@@ -24,6 +24,12 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag_override:
+        description: 'Tag to attach release artefacts to (defaults to latest v*.*.* tag for manual smoke runs)'
+        required: false
+        default: 'v0.1.0'
 
 permissions:
   contents: write          # required to create / update GitHub Releases.
@@ -60,14 +66,10 @@ jobs:
           echo "CCT_KEYSTORE_FILE=$HOME/keystore/release.keystore" >> $GITHUB_ENV
 
       - name: Run unit tests
-        run: |
-          cd companion-android
-          ./gradlew testDebugUnitTest --console=plain --no-daemon
+        run: ./gradlew testDebugUnitTest --console=plain --no-daemon
 
       - name: Run release-check E2E gate
-        run: |
-          cd companion-android
-          bash scripts/e2e/run_release_check.sh
+        run: bash scripts/e2e/run_release_check.sh
 
       - name: Build release bundle (AAB)
         env:
@@ -76,9 +78,7 @@ jobs:
           CCT_KEY_ALIAS: ${{ secrets.CCT_KEY_ALIAS }}
           CCT_KEY_PASSWORD: ${{ secrets.CCT_KEY_PASSWORD }}
           CCT_SENTRY_DSN: ${{ secrets.CCT_SENTRY_DSN }}
-        run: |
-          cd companion-android
-          ./gradlew bundleRelease --console=plain --no-daemon
+        run: ./gradlew bundleRelease --console=plain --no-daemon
 
       - name: Build release APK (universal)
         env:
@@ -87,13 +87,11 @@ jobs:
           CCT_KEY_ALIAS: ${{ secrets.CCT_KEY_ALIAS }}
           CCT_KEY_PASSWORD: ${{ secrets.CCT_KEY_PASSWORD }}
           CCT_SENTRY_DSN: ${{ secrets.CCT_SENTRY_DSN }}
-        run: |
-          cd companion-android
-          ./gradlew assembleRelease --console=plain --no-daemon
+        run: ./gradlew assembleRelease --console=plain --no-daemon
 
       - name: Compute artefact checksums
         run: |
-          cd companion-android/app/build/outputs
+          cd app/build/outputs
           shopt -s nullglob
           if compgen -G "bundle/release/app-release.aab" > /dev/null; then
             sha256sum bundle/release/app-release.aab > bundle/release/app-release.aab.sha256
@@ -102,12 +100,24 @@ jobs:
             sha256sum apk/release/app-release.apk > apk/release/app-release.apk.sha256
           fi
 
-      - name: Render release notes from CHANGELOG
-        id: render_notes
+      - name: Resolve release tag
+        id: resolve_tag
         run: |
-          cd companion-android
-          tag="${GITHUB_REF#refs/tags/}"
-          version="${tag#v}"
+          # On tag push, GITHUB_REF is refs/tags/v*.*.*; on workflow_dispatch
+          # we accept an input override (default v0.1.0).
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="${{ inputs.tag_override }}"
+            if [[ -z "$tag" ]]; then tag="v0.1.0"; fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Render release notes from CHANGELOG
+        run: |
+          version="${{ steps.resolve_tag.outputs.version }}"
+          tag="${{ steps.resolve_tag.outputs.tag }}"
           # Pull the CHANGELOG section between [version] and the next [vN].
           awk "/## \\[${version}\\]/{flag=1; next} /## \\[/{flag=0} flag" CHANGELOG.md > /tmp/release-notes.md
           if [ ! -s /tmp/release-notes.md ]; then
@@ -130,13 +140,14 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.resolve_tag.outputs.tag }}
           body_path: /tmp/release-body.md
           generate_release_notes: false
           files: |
-            companion-android/app/build/outputs/bundle/release/app-release.aab
-            companion-android/app/build/outputs/bundle/release/app-release.aab.sha256
-            companion-android/app/build/outputs/apk/release/app-release.apk
-            companion-android/app/build/outputs/apk/release/app-release.apk.sha256
-            companion-android/CHANGELOG.md
+            app/build/outputs/bundle/release/app-release.aab
+            app/build/outputs/bundle/release/app-release.aab.sha256
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/app-release.apk.sha256
+            CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
