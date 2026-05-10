@@ -31,7 +31,16 @@ class QrDecoder {
      * payload string (typically the dashboard's
      * `{"daemon_url":"...","pairing_token":"..."}` JSON) or null if no
      * QR symbol is found in the frame.
+     *
+     * Rotation is intentionally ignored — ZXing's QR pattern detector
+     * finds the three position markers regardless of bitmap orientation,
+     * so feeding it the raw camera plane works at any rotation. (An
+     * earlier version tried to rotate the LuminanceSource explicitly,
+     * which crashed with UnsupportedOperationException because
+     * PlanarYUVLuminanceSource doesn't implement
+     * rotateCounterClockwise() — only RGBLuminanceSource does.)
      */
+    @Suppress("UNUSED_PARAMETER")
     fun decodeLuminance(
         yPlane: ByteArray,
         width: Int,
@@ -43,13 +52,7 @@ class QrDecoder {
             0, 0, width, height,
             false,
         )
-        val rotated = when (rotation) {
-            90 -> source.rotateCounterClockwise().rotateCounterClockwise().rotateCounterClockwise() // 270 CCW = 90 CW
-            180 -> source.invert()  // PlanarYUVLuminanceSource lacks rotate-180; invert is close enough for QR
-            270 -> source.rotateCounterClockwise()
-            else -> source
-        }
-        val bitmap = BinaryBitmap(HybridBinarizer(rotated))
+        val bitmap = BinaryBitmap(HybridBinarizer(source))
         return try {
             reader.decode(bitmap).text
         } catch (_: NotFoundException) {
