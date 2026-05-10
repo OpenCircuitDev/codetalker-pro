@@ -1,25 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  CCT-31 — Codetalker AR Companion manifest.
+  CCT-31 / CCT-32 — codetalker companion manifest.
 
-  Permissions:
-    - INTERNET: hits codetalker daemon over LAN/Tailscale
-    - ACCESS_NETWORK_STATE: ConnectionGuard listens for WiFi/network changes
-    - RECORD_AUDIO: STT input when user clicks side button
-    - CAMERA: QR-scan for daemon pairing
-    - FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK: keep audio
-      stream alive when the app goes to background while wearing glasses
+  Permission rationales (Phase F.3): every dangerous permission ships
+  with an inline comment that pairs to the corresponding section in
+  docs/PRIVACY-POLICY.md §3 and the listing-page disclosure in
+  store-assets/google-play/listing.md and store-assets/xreal-store/listing.md.
+
+  Privacy-policy URL is exposed via the in-app About screen (deep-link to
+  the published markdown). The Data Safety Form responses live in
+  store-assets/google-play/data-safety-form.md.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Reach the codetalker desktop daemon over LAN / Tailnet. No remote
+         servers. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Push-to-talk speech capture during the side-button gesture. Audio
+         is streamed to the paired daemon and never stored. PRIVACY-POLICY §2.2 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- One-time QR pairing only. Camera is not used after pairing. -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Keep TTS audio alive while screen is off. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- Show the foreground-service status notification (Android 13+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Optional opt-in: re-launch service after device boot. Wired only
+         if the user enables 'Start on device boot' in Preferences. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -39,6 +54,34 @@
           variant covers Android 13+ themed icons. No PNG fallbacks
           needed — minSdk=31 (Android 12) always supports adaptive XML.
         -->
+
+        <!--
+          CCT-32 Task F.3: privacy-policy + ToS deep-links exposed to
+          installers / app-info screens. Google Play scanner picks up the
+          PRIVACY_POLICY_URL meta-data automatically.
+        -->
+        <meta-data
+            android:name="dev.opencircuit.codetalker.PRIVACY_POLICY_URL"
+            android:value="https://github.com/OpenCircuitDev/codetalker-pro/blob/main/companion-android/docs/PRIVACY-POLICY.md" />
+        <meta-data
+            android:name="dev.opencircuit.codetalker.TERMS_URL"
+            android:value="https://github.com/OpenCircuitDev/codetalker-pro/blob/main/companion-android/docs/TERMS.md" />
+
+        <!--
+          CCT-32 Task F.3 — permission rationales referenced at runtime
+          by ui/permissions/PermissionRationaleScreen. Keeping them as
+          meta-data lets the listing scanner cross-reference manifest
+          entries against the strings the user sees.
+        -->
+        <meta-data
+            android:name="dev.opencircuit.codetalker.RATIONALE_RECORD_AUDIO"
+            android:value="@string/permission_mic_body" />
+        <meta-data
+            android:name="dev.opencircuit.codetalker.RATIONALE_CAMERA"
+            android:value="@string/permission_camera_body" />
+        <meta-data
+            android:name="dev.opencircuit.codetalker.RATIONALE_POST_NOTIFICATIONS"
+            android:value="@string/permission_notifications_body" />
 
         <!--
           usesCleartextTraffic=true allows http:// to LAN IPs and Tailnet
