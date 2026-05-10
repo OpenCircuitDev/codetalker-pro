@@ -56,6 +56,19 @@
         -->
 
         <!--
+          CCT-32 Task G.1 — disable Sentry's auto-init ContentProvider.
+          Sentry installs a ContentProvider that calls SentryAndroid.init
+          BEFORE the application's onCreate; with no DSN configured at
+          build time it throws IllegalArgumentException and crashes the
+          app on launch. CrashReporter.init() is the single source of
+          truth for SDK initialization, gated by user consent + DSN
+          presence (PRIVACY-POLICY.md §4 invariant).
+        -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
+
+        <!--
           CCT-32 Task F.3: privacy-policy + ToS deep-links exposed to
           installers / app-info screens. Google Play scanner picks up the
           PRIVACY_POLICY_URL meta-data automatically.
