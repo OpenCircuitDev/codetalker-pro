@@ -1,16 +1,190 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  CCT-32 Task C.4 — final UI copy.
+
+  Every visible string lives here. Plurals use <plurals> for grammatical
+  correctness; placeholders use positional %s/%d so translations are
+  reorderable. End-user copy avoids dev shorthand ("daemon" → "the
+  codetalker desktop", "SSE" → "live updates", etc.).
+-->
 <resources>
-    <string name="app_name">Codetalker</string>
-    <string name="pair_title">Pair with codetalker daemon</string>
-    <string name="pair_scan_qr">Scan the QR code from the dashboard\'s Preferences panel</string>
-    <string name="pair_manual_url">Or enter daemon URL manually</string>
+    <!-- App identity -->
+    <string name="app_name">codetalker</string>
+    <string name="app_full_name">codetalker companion</string>
+    <string name="app_tagline">speak to your code, listen to your code</string>
+
+    <!-- Pairing -->
+    <string name="pair_title">Pair with the codetalker desktop</string>
+    <string name="pair_scan_qr">Scan the QR code from the dashboard’s Preferences panel.</string>
+    <string name="pair_manual_url">Or enter the daemon URL manually</string>
     <string name="pair_manual_token">Pairing token</string>
     <string name="pair_save">Save</string>
+    <string name="pair_invalid">That QR didn’t decode. Re-generate from the dashboard and try again.</string>
+    <string name="pair_unpair">Unpair this device</string>
+    <string name="pair_unpair_confirm">Forget the saved daemon URL and pairing token? You’ll need to scan a fresh QR to reconnect.</string>
+
+    <!-- HUD overlay -->
     <string name="hud_no_session">No active session</string>
     <string name="hud_listening">Listening…</string>
     <string name="hud_connecting">Connecting…</string>
-    <string name="hud_offline">Daemon unreachable</string>
+    <string name="hud_offline">codetalker desktop unreachable</string>
+    <string name="hud_caption_placeholder">Tap the side button to talk.</string>
+
+    <!-- Sessions menu -->
     <string name="menu_title">Sessions</string>
     <string name="menu_show_screen">Show screen</string>
     <string name="menu_hide_screen">Hide screen</string>
+    <string name="menu_open_preferences">Preferences</string>
+    <string name="menu_open_diagnostics">Diagnostics</string>
+    <string name="menu_open_about">About</string>
+
+    <!-- Session list -->
+    <string name="sessions_empty_title">No sessions yet</string>
+    <string name="sessions_empty_body">Run Claude Code on your desktop and the live sessions will appear here.</string>
+    <string name="sessions_loading">Loading sessions…</string>
+    <string name="sessions_offline_title">Could not reach the codetalker desktop</string>
+    <string name="sessions_offline_body">The dashboard might be paused, or this device might be on a different network. Check that codetalker is running and tap Retry.</string>
+    <string name="sessions_retry">Retry</string>
+    <plurals name="sessions_count">
+        <item quantity="one">%d session</item>
+        <item quantity="other">%d sessions</item>
+    </plurals>
+
+    <!-- Session row chips -->
+    <string name="session_live">Live</string>
+    <string name="session_idle">Idle</string>
+    <string name="session_active">Active</string>
+
+    <!-- Session detail screen -->
+    <string name="detail_back">Back</string>
+    <string name="detail_make_active">Make active</string>
+    <string name="detail_active">Active session</string>
+    <string name="detail_make_active_hint">Sends this session’s audio + transcript to the AR companion.</string>
+    <string name="detail_set_active">Set active</string>
+    <string name="detail_loading">Loading session details…</string>
+    <string name="detail_load_failed">Could not load: %s</string>
+    <string name="detail_section_mode">Speaking mode</string>
+    <string name="detail_section_voice">Voice</string>
+    <string name="detail_section_cadence">Cadence (live mode)</string>
+    <string name="detail_section_character">Character</string>
+    <string name="detail_section_markup">Markup treatments</string>
+
+    <!-- Mode picker labels -->
+    <string name="mode_brief">Brief</string>
+    <string name="mode_direct">Direct</string>
+    <string name="mode_live">Live</string>
+    <string name="mode_trigger">Trigger</string>
+
+    <!-- Cadence picker labels -->
+    <string name="cadence_slow">Slow</string>
+    <string name="cadence_normal">Normal</string>
+    <string name="cadence_fast">Fast</string>
+
+    <!-- Muted toggle -->
+    <string name="muted_label_muted">Muted</string>
+    <string name="muted_label_speaking">Speaking</string>
+    <string name="muted_hint">Mute pauses narration without dropping the live caption stream.</string>
+
+    <!-- Character picker -->
+    <string name="character_none_attached">No character attached</string>
+    <string name="character_choose">Choose character</string>
+    <string name="character_detach">Detach</string>
+    <string name="character_loading">Loading characters…</string>
+    <string name="character_empty">No characters yet — create one in the desktop dashboard.</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Welcome to codetalker companion</string>
+    <string name="onboarding_welcome_body">Hands-free voice + AR for your local codetalker desktop. Three quick steps to get going.</string>
+    <string name="onboarding_daemon_title">Start the codetalker desktop</string>
+    <string name="onboarding_daemon_body">Run codetalker on your computer (open source — see the GitHub link in About) and open its dashboard.</string>
+    <string name="onboarding_pair_title">Scan the pairing QR</string>
+    <string name="onboarding_pair_body">In the dashboard, open Preferences → Pair AR Companion. Scan the QR with this device’s camera.</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_skip">Skip for now</string>
+    <string name="onboarding_finish">Get started</string>
+
+    <!-- Permissions -->
+    <string name="permission_camera_title">Camera access</string>
+    <string name="permission_camera_body">codetalker uses the camera once — to scan the pairing QR from your desktop dashboard. The camera is not used after pairing.</string>
+    <string name="permission_mic_title">Microphone access</string>
+    <string name="permission_mic_body">codetalker uses the microphone only when you press the side button. Audio is streamed to your codetalker desktop and never recorded or stored.</string>
+    <string name="permission_notifications_title">Notifications</string>
+    <string name="permission_notifications_body">codetalker shows a foreground notification while audio is streaming, so Android keeps the connection alive when the screen is off.</string>
+    <string name="permission_grant">Allow</string>
+    <string name="permission_open_settings">Open settings</string>
+    <string name="permission_skip">Skip for now</string>
+    <string name="permission_denied_settings_hint">codetalker needs %s to work. Open the system settings to grant it.</string>
+
+    <!-- Error banner -->
+    <string name="error_retry">Retry</string>
+    <string name="error_dismiss">Dismiss</string>
+    <string name="error_open_settings">Open settings</string>
+    <string name="error_repair">Re-pair</string>
+
+    <!-- Preferences -->
+    <string name="prefs_title">Preferences</string>
+    <string name="prefs_boot_title">Start on device boot</string>
+    <string name="prefs_boot_body">When the glasses power on, automatically reconnect to the codetalker desktop if you’ve already paired.</string>
+    <string name="prefs_crash_title">Send anonymous crash reports</string>
+    <string name="prefs_crash_body">Help improve stability by sharing stack traces and device model only. No audio, transcripts, or session text are ever sent.</string>
+    <string name="prefs_crash_hint_off">Crash reports are off.</string>
+    <string name="prefs_crash_hint_on">Crash reports are on.</string>
+    <string name="prefs_diagnostics">Diagnostics</string>
+    <string name="prefs_about">About this app</string>
+
+    <!-- Diagnostics -->
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_pairing">Pairing</string>
+    <string name="diagnostics_daemon">codetalker desktop</string>
+    <string name="diagnostics_audio">Audio</string>
+    <string name="diagnostics_buddy">Buddy session</string>
+    <string name="diagnostics_glasses">Glasses</string>
+    <string name="diagnostics_battery">Battery</string>
+    <string name="diagnostics_token_valid">Token valid</string>
+    <string name="diagnostics_token_unknown">Token status unknown</string>
+
+    <!-- About -->
+    <string name="about_title">About codetalker</string>
+    <string name="about_version">Version %1$s (build %2$d)</string>
+    <string name="about_license_app">© Open Circuit Dev. App code under proprietary license.</string>
+    <string name="about_license_oss">OSS components under MIT.</string>
+    <string name="about_third_party_title">Third-party libraries</string>
+    <string name="about_privacy_link">Privacy policy</string>
+    <string name="about_terms_link">Terms of service</string>
+    <string name="about_github_link">Source on GitHub</string>
+    <string name="about_check_updates">Check for updates</string>
+
+    <!-- Time / count helpers used across the app -->
+    <plurals name="minutes_ago">
+        <item quantity="one">%d minute ago</item>
+        <item quantity="other">%d minutes ago</item>
+    </plurals>
+    <plurals name="seconds_ago">
+        <item quantity="one">%d second ago</item>
+        <item quantity="other">%d seconds ago</item>
+    </plurals>
+    <plurals name="hours_ago">
+        <item quantity="one">%d hour ago</item>
+        <item quantity="other">%d hours ago</item>
+    </plurals>
+    <plurals name="days_ago">
+        <item quantity="one">%d day ago</item>
+        <item quantity="other">%d days ago</item>
+    </plurals>
+
+    <!-- Foreground service notification -->
+    <string name="service_notification_title">codetalker is listening</string>
+    <string name="service_notification_idle">Tap to open the dashboard.</string>
+    <string name="service_notification_disconnect">Disconnect</string>
+
+    <!-- Session-offline error (replaces the Broken-pipe technical message) -->
+    <string name="session_offline_title">This session isn’t live in Claude Code</string>
+    <string name="session_offline_body">The codetalker desktop says this session has stopped streaming. Tap Refresh to reload the live list.</string>
+    <string name="session_offline_action">Refresh sessions</string>
+
+    <!-- Telemetry consent -->
+    <string name="consent_crash_title">Help improve codetalker?</string>
+    <string name="consent_crash_body">If something crashes, send anonymous crash reports? You can change this any time in Preferences.</string>
+    <string name="consent_crash_decline">No thanks</string>
+    <string name="consent_crash_accept">Sure, send reports</string>
 </resources>
