@@ -47,3 +47,36 @@ cct_section() {
   echo ""
   echo -e "===== $1 ====="
 }
+
+# CCT-32 Phase C — file-existence helpers for asset / doc verification.
+cct_assert_file_exists() {
+  local path="$1" msg="$2"
+  if [[ -f "$path" ]]; then
+    echo -e "  ${GREEN}PASS${RESET}: $msg"
+    return 0
+  else
+    echo -e "  ${RED}FAIL${RESET}: $msg (missing file: $path)"
+    return 1
+  fi
+}
+
+cct_assert_dir_exists() {
+  local path="$1" msg="$2"
+  if [[ -d "$path" ]]; then
+    echo -e "  ${GREEN}PASS${RESET}: $msg"
+    return 0
+  else
+    echo -e "  ${RED}FAIL${RESET}: $msg (missing directory: $path)"
+    return 1
+  fi
+}
+
+cct_section_summary() {
+  local fails="$1" name="$2"
+  echo ""
+  if [[ "$fails" -eq 0 ]]; then
+    echo -e "  ${GREEN}OK${RESET}: $name (no failures)"
+  else
+    echo -e "  ${RED}FAIL${RESET}: $name had $fails failure(s)"
+  fi
+}
