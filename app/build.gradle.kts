@@ -19,6 +19,14 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // CCT-32 Task G.1 — Sentry DSN flows in via signing config, not
+        // via the source tree. Empty string means "crash reporting is
+        // not configured" — CrashReporter.init() degrades to a no-op.
+        // Real DSNs are set via ~/.gradle/gradle.properties → CCT_SENTRY_DSN
+        // or via the GitHub Action secret in CI.
+        buildConfigField("String", "SENTRY_DSN",
+            "\"${project.findProperty("CCT_SENTRY_DSN") as String? ?: ""}\"")
     }
 
     sourceSets {
@@ -30,10 +38,50 @@ android {
         }
     }
 
+    /*
+     * CCT-32 Task D.2 — release signing.
+     *
+     * Reads the four CCT_KEYSTORE_* properties from
+     * ~/.gradle/gradle.properties (or GitHub Secrets in CI; see
+     * docs/DEVELOPER-GUIDE.md §3).
+     *
+     * Behaviour matrix:
+     *   - All four properties present → AAB ships signed.
+     *   - CCT_KEYSTORE_FILE missing → release type drops the
+     *     signingConfig and produces an unsigned bundle (CI smoke
+     *     test, local-dev path before the keystore is generated).
+     */
+    signingConfigs {
+        create("release") {
+            val ksPath = project.findProperty("CCT_KEYSTORE_FILE") as String?
+            if (ksPath != null) {
+                storeFile = file(ksPath)
+                storePassword = project.findProperty("CCT_KEYSTORE_PASSWORD") as String? ?: ""
+                keyAlias = project.findProperty("CCT_KEY_ALIAS") as String? ?: "codetalker"
+                keyPassword = project.findProperty("CCT_KEY_PASSWORD") as String? ?: ""
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // CCT-32 Task D.2 / D.3 — minified + signed release path.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            // Only wire the signing config when the keystore is configured.
+            // Without it, AGP would NPE inside FinalizeBundleTask.
+            val ksPath = project.findProperty("CCT_KEYSTORE_FILE") as String?
+            if (ksPath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        debug {
+            // Debug stays unminified for fast iteration.
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
