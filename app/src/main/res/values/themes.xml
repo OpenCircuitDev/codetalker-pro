@@ -11,4 +11,29 @@
         <item name="android:colorBackground">@color/surface_0</item>
         <item name="android:textColorPrimary">@color/text_1</item>
     </style>
+
+    <!--
+      CCT-32 Task C.2 — Branded splash screen via the Android 12+ SplashScreen
+      API (windowSplashScreen* attributes). Background uses the brand
+      midnight surface; the launcher icon (cyan→violet orb) renders as the
+      splash mark. Animation is the system default fade — no custom Lottie.
+
+      `postSplashScreenTheme` hands control back to Theme.Codetalker so the
+      activity inherits the same colours after the splash dissolves.
+    -->
+    <style name="Theme.Codetalker.Splash" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="l">#0a0b10</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">#0a0b10</item>
+        <item name="android:windowBackground">@color/surface_0</item>
+        <item name="android:colorBackground">@color/surface_0</item>
+        <item name="android:textColorPrimary">@color/text_1</item>
+        <!-- Splash background — pulled from Phase 27 palette. -->
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">#0a0b10</item>
+        <!-- Foreground icon — uses the adaptive launcher; system trims to a
+             round disc so we render the orb without the outer aura. -->
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor" tools:targetApi="s">#0a0b10</item>
+        <!-- After ~500ms the splash hands the window over to the regular
+             theme (no action bar, midnight background). -->
+    </style>
 </resources>

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -72,6 +73,10 @@ class MainActivity : ComponentActivity() {
     private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // CCT-32 Task C.2 — installSplashScreen() must be called BEFORE
+        // super.onCreate so the splash window is owned by the SplashScreen
+        // compat library and dissolves cleanly into our Compose root.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         pairingFlow = PairingFlow(this)
         appPreferences = AppPreferences.forContext(this)
@@ -167,9 +172,10 @@ private fun CompanionRoot(
     // for v1.0 and avoids reload-on-pop.
     var selectedSession by remember { mutableStateOf<SessionLite?>(null) }
     var activeSessionId by remember { mutableStateOf<String?>(null) }
-    // CCT-32 Task B.4 / B.6 — secondary screens reachable via long-press menu.
+    // CCT-32 Task B.4 / B.6 / C.5 — secondary screens reachable via long-press menu.
     var showingPreferences by remember { mutableStateOf(false) }
     var showingDiagnostics by remember { mutableStateOf(false) }
+    var showingAbout by remember { mutableStateOf(false) }
 
     // CCT-32 Task B.5: restore active session id from DataStore on launch
     // so process death doesn't drop the user into "no active session."
@@ -280,6 +286,12 @@ private fun CompanionRoot(
             )
             return
         }
+        if (showingAbout) {
+            dev.opencircuit.codetalker.ui.AboutScreen(
+                onBack = { showingAbout = false },
+            )
+            return
+        }
         if (showingPreferences) {
             PreferencesScreen(
                 appPreferences = appPreferences,
@@ -287,6 +299,10 @@ private fun CompanionRoot(
                 onOpenDiagnostics = {
                     showingPreferences = false
                     showingDiagnostics = true
+                },
+                onOpenAbout = {
+                    showingPreferences = false
+                    showingAbout = true
                 },
             )
             return
