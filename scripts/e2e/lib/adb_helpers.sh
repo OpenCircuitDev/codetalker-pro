@@ -3,17 +3,26 @@
 
 # Beam Pro X4200 device id, set by ./pair.sh in CCT-31. Override with
 # CCT_DEVICE if you have a different paired device.
-DEVICE="${CCT_DEVICE:-4630946175150030210}"
+DEVICE="${CCT_DEVICE:-adb-TGLM4CG1186540-zBd1x4._adb-tls-connect._tcp}"
 
 # Path to platform-tools — ensures the scripts work in CI / fresh shells.
 export PATH="/c/Users/brand/AppData/Local/Android/Sdk/platform-tools:$PATH"
 export MSYS_NO_PATHCONV=1
 
 # Resolve repo root no matter where the script is run from.
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." &> /dev/null && pwd)"
-SCREENSHOT_DIR="$REPO_ROOT/../docs/mockups/screenshots"
-mkdir -p "$SCREENSHOT_DIR"
+_ADB_HELPERS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+REPO_ROOT="$(cd -- "$_ADB_HELPERS_DIR/../../.." &> /dev/null && pwd)"
+# Convert to native Windows path so adb pull doesn't choke on /c/... mapping.
+SCREENSHOT_DIR_RAW="$(cd -- "$REPO_ROOT/.." &> /dev/null && pwd)/docs/mockups/screenshots"
+mkdir -p "$SCREENSHOT_DIR_RAW"
+if command -v cygpath > /dev/null 2>&1; then
+  SCREENSHOT_DIR="$(cygpath -w "$SCREENSHOT_DIR_RAW" | tr '\\' '/')"
+else
+  SCREENSHOT_DIR="$SCREENSHOT_DIR_RAW"
+fi
+# Ensure JAVA_HOME for any nested gradle calls.
+export JAVA_HOME="${JAVA_HOME:-/c/Program Files/Android/Android Studio/jbr}"
+export ANDROID_HOME="${ANDROID_HOME:-/c/Users/brand/AppData/Local/Android/Sdk}"
 
 adb_dev() { adb -s "$DEVICE" "$@"; }
 
