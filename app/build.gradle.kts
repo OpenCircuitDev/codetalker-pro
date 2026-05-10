@@ -120,6 +120,10 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.core.splashscreen)
+    // CCT-32 Task G.1 — opt-in Sentry crash reporter. CrashReporter.init()
+    // gates the SDK initialization on AppPreferences.crashReportingEnabled
+    // so the SDK never fires unless the user has explicitly consented.
+    implementation(libs.sentry.android)
 
     // Networking
     implementation(libs.okhttp)
