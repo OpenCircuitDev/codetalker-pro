@@ -89,6 +89,20 @@ sealed class AppError(
         actionLabel = null,
         recovery = Recovery.None,
     )
+
+    /**
+     * CCT-32 Phase C — replaces the raw "Broken pipe" / "stream closed"
+     * IOException leak that surfaced when a Claude Code session went idle
+     * mid-narration. The previous behaviour rendered the JVM exception
+     * message verbatim; the fix wraps it in a user-meaningful message and
+     * a single recovery action.
+     */
+    data object SessionOffline : AppError(
+        title = "This session isn’t currently live in Claude Code",
+        body = "The codetalker desktop says this session has stopped streaming. Refresh the session list to pick a different one.",
+        actionLabel = "Refresh sessions",
+        recovery = Recovery.Retry,
+    )
 }
 
 /**
@@ -104,12 +118,21 @@ object AppErrors {
      */
     fun fromThrowable(t: Throwable): AppError {
         val msg = t.message.orEmpty()
+        val msgLower = msg.lowercase()
         return when {
             "HTTP 401" in msg || "HTTP 403" in msg -> AppError.TokenExpired
             "HTTP 426" in msg -> AppError.DaemonVersionMismatch(
                 serverApi = extractApiVersion(msg) ?: "?",
                 clientApi = "v1",
             )
+            // CCT-32 Phase C — session that went away mid-stream. Daemon
+            // closes the SSE / HTTP stream; OkHttp surfaces "broken pipe"
+            // or "stream was reset" / "stream closed". Wrap before the
+            // user sees the JVM message.
+            "HTTP 410" in msg || "HTTP 404" in msg ||
+                "broken pipe" in msgLower || "stream was reset" in msgLower ||
+                "stream closed" in msgLower || "unexpected end of stream" in msgLower
+                -> AppError.SessionOffline
             t is IOException -> AppError.DaemonUnreachable
             else -> AppError.DaemonUnreachable
         }

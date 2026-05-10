@@ -23,9 +23,20 @@ interface AppPreferences {
     val startOnBoot: Flow<Boolean>
     val activeSessionId: Flow<String?>
 
+    /**
+     * CCT-32 Task G.2 — opt-in crash reporting flag. Default false.
+     * `crashReportingConsentAsked` distinguishes "user has not yet been
+     * asked" (show ConsentFlow once) from "user explicitly declined"
+     * (consent asked = true, enabled = false).
+     */
+    val crashReportingEnabled: Flow<Boolean>
+    val crashReportingConsentAsked: Flow<Boolean>
+
     suspend fun setOnboardingComplete(value: Boolean)
     suspend fun setStartOnBoot(value: Boolean)
     suspend fun setActiveSessionId(value: String?)
+    suspend fun setCrashReportingEnabled(value: Boolean)
+    suspend fun setCrashReportingConsentAsked(value: Boolean)
 
     companion object {
         /** Production factory — backed by androidx.datastore.preferences. */
@@ -38,6 +49,8 @@ object AppPreferenceKeys {
     val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
     val START_ON_BOOT = booleanPreferencesKey("start_on_boot")
     val ACTIVE_SESSION_ID = stringPreferencesKey("active_session_id")
+    val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
+    val CRASH_REPORTING_CONSENT_ASKED = booleanPreferencesKey("crash_reporting_consent_asked")
 }
 
 class DataStoreAppPreferences(
@@ -56,6 +69,14 @@ class DataStoreAppPreferences(
         it[AppPreferenceKeys.ACTIVE_SESSION_ID]
     }
 
+    override val crashReportingEnabled: Flow<Boolean> = store.data.map {
+        it[AppPreferenceKeys.CRASH_REPORTING_ENABLED] == true
+    }
+
+    override val crashReportingConsentAsked: Flow<Boolean> = store.data.map {
+        it[AppPreferenceKeys.CRASH_REPORTING_CONSENT_ASKED] == true
+    }
+
     override suspend fun setOnboardingComplete(value: Boolean) {
         store.edit { it[AppPreferenceKeys.ONBOARDING_COMPLETE] = value }
     }
@@ -69,6 +90,14 @@ class DataStoreAppPreferences(
             if (value == null) it.remove(AppPreferenceKeys.ACTIVE_SESSION_ID)
             else it[AppPreferenceKeys.ACTIVE_SESSION_ID] = value
         }
+    }
+
+    override suspend fun setCrashReportingEnabled(value: Boolean) {
+        store.edit { it[AppPreferenceKeys.CRASH_REPORTING_ENABLED] = value }
+    }
+
+    override suspend fun setCrashReportingConsentAsked(value: Boolean) {
+        store.edit { it[AppPreferenceKeys.CRASH_REPORTING_CONSENT_ASKED] = value }
     }
 }
 

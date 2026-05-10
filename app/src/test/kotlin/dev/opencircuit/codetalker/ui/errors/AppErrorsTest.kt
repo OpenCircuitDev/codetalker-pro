@@ -54,11 +54,44 @@ class AppErrorsTest {
             AppError.NetworkDown,
             AppError.AudioFocusLost,
             AppError.InvalidPairingPayload,
+            AppError.SessionOffline,
             AppError.DaemonVersionMismatch("v2", "v1"),
         )
         for (entry in all) {
             assertTrue("title for $entry", entry.title.isNotBlank())
             assertTrue("body for $entry", entry.body.isNotBlank())
         }
+    }
+
+    // ---------- CCT-32 Phase C — SessionOffline mapping ----------
+
+    @Test
+    fun `Broken pipe IOException maps to SessionOffline`() {
+        val e = IOException("inject failed: java.io.IOException: Broken pipe")
+        assertSame(AppError.SessionOffline, AppErrors.fromThrowable(e))
+    }
+
+    @Test
+    fun `stream was reset maps to SessionOffline`() {
+        val e = IOException("stream was reset: CANCEL")
+        assertSame(AppError.SessionOffline, AppErrors.fromThrowable(e))
+    }
+
+    @Test
+    fun `HTTP 410 Gone maps to SessionOffline`() {
+        val e = IOException("getSession HTTP 410: session no longer live")
+        assertSame(AppError.SessionOffline, AppErrors.fromThrowable(e))
+    }
+
+    @Test
+    fun `unexpected end of stream maps to SessionOffline`() {
+        val e = IOException("unexpected end of stream while parsing SSE")
+        assertSame(AppError.SessionOffline, AppErrors.fromThrowable(e))
+    }
+
+    @Test
+    fun `SessionOffline has refresh-style action label`() {
+        assertEquals("Refresh sessions", AppError.SessionOffline.actionLabel)
+        assertSame(AppError.Recovery.Retry, AppError.SessionOffline.recovery)
     }
 }

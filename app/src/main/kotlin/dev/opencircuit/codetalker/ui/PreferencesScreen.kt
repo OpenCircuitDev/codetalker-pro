@@ -35,9 +35,14 @@ fun PreferencesScreen(
     appPreferences: AppPreferences,
     onBack: () -> Unit,
     onOpenDiagnostics: (() -> Unit)? = null,
+    onOpenAbout: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val startOnBoot by appPreferences.startOnBoot.collectAsState(initial = false)
+    // CCT-32 Task G.2 — opt-in crash reporting toggle. ConsentFlow asks
+    // once at first launch; this surfaces the setting forever after so
+    // the user can flip it.
+    val crashReportingEnabled by appPreferences.crashReportingEnabled.collectAsState(initial = false)
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
@@ -70,12 +75,44 @@ fun PreferencesScreen(
             )
         }
 
+        // CCT-32 Task G.2 — crash-report toggle (opt-in only).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        ) {
+            Column(Modifier.fillMaxWidth(0.8f)) {
+                Text(
+                    "Send anonymous crash reports",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    "Help improve stability by sharing stack traces and device model only. No audio, transcripts, or session text are ever sent.",
+                    fontSize = 12.sp,
+                )
+            }
+            Switch(
+                checked = crashReportingEnabled,
+                onCheckedChange = { newValue ->
+                    scope.launch { appPreferences.setCrashReportingEnabled(newValue) }
+                },
+            )
+        }
+
         if (onOpenDiagnostics != null) {
             Spacer(Modifier.height(16.dp))
             OutlinedButton(
                 onClick = onOpenDiagnostics,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Diagnostics") }
+        }
+        if (onOpenAbout != null) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onOpenAbout,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("About this app") }
         }
     }
 }
