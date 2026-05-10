@@ -116,7 +116,176 @@ class DaemonClient(
      *  hands this to ExoPlayer/MediaSource. */
     fun audioStreamUrl(sessionId: String): String =
         "$baseUrl/api/companion/audio-stream/$sessionId"
+
+    // ------------------ CCT-32 Task A.1: full session/voice/character API ------------------
+
+    /** GET /api/sessions/{session_id} — returns state + resolved_cfg merged into [SessionState]. */
+    fun getSession(sessionId: String): SessionState {
+        val req = buildBase("/api/sessions/$sessionId").build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("getSession HTTP ${resp.code}")
+            val body = resp.body?.string() ?: "{}"
+            val root = JSONObject(body)
+            val state = root.optJSONObject("state") ?: JSONObject()
+            val cfg = root.optJSONObject("resolved_cfg") ?: JSONObject()
+
+            val voiceObj = cfg.optJSONObject("voice")
+            val liveObj = cfg.optJSONObject("live")
+            val markupObj = cfg.optJSONObject("markup")
+            val markup = mutableMapOf<String, MarkupTreatment>()
+            if (markupObj != null) {
+                val keys = markupObj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    val v = markupObj.optJSONObject(k) ?: continue
+                    val kind = v.optString("kind", "")
+                    if (kind.isNotBlank()) markup[k] = MarkupTreatment(kind)
+                }
+            }
+            return SessionState(
+                sessionId = state.optString("session_id", sessionId),
+                cwd = state.optString("cwd", ""),
+                attachedProfile = state.optString("attached_profile", "").ifBlank { null },
+                attachedCharacterId = state.optString("attached_character", "").ifBlank { null },
+                activeMode = cfg.optString("active_mode", ""),
+                voiceEngine = voiceObj?.optString("engine")?.ifBlank { null },
+                voiceModel = voiceObj?.optString("model")?.ifBlank { null },
+                cadence = liveObj?.optString("cadence")?.ifBlank { null },
+                enabled = cfg.optBoolean("enabled", true),
+                markup = markup,
+            )
+        }
+    }
+
+    /**
+     * PUT /api/sessions/{session_id}/overlay — partial overlay merge.
+     * Pass a nested map; null values delete the keypath.
+     */
+    fun putOverlay(sessionId: String, overlay: Map<String, Any?>) {
+        val body = mapToJson(overlay).toString().toRequestBody(JSON)
+        val req = buildBase("/api/sessions/$sessionId/overlay").put(body).build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("putOverlay HTTP ${resp.code}: ${resp.body?.string()}")
+        }
+    }
+
+    /**
+     * GET /api/voices?engine={engine}.
+     *
+     * The daemon may return either a flat list of strings (current) or
+     * objects with `engine`/`model`/`display_name` (future). Both are
+     * normalized into [VoiceLite].
+     */
+    fun listVoices(engine: String): List<VoiceLite> {
+        val req = buildBase("/api/voices?engine=$engine").build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("listVoices HTTP ${resp.code}")
+            val body = resp.body?.string() ?: "[]"
+            val arr = JSONArray(body)
+            return List(arr.length()) { i ->
+                val any = arr.opt(i)
+                if (any is JSONObject) {
+                    VoiceLite(
+                        engine = any.optString("engine", engine),
+                        model = any.optString("model", ""),
+                        displayName = any.optString("display_name", any.optString("model", "")),
+                    )
+                } else {
+                    val model = any?.toString() ?: ""
+                    VoiceLite(engine = engine, model = model, displayName = model)
+                }
+            }
+        }
+    }
+
+    /** GET /api/characters — full character library. */
+    fun listCharacters(): List<CharacterLite> {
+        val req = buildBase("/api/characters").build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("listCharacters HTTP ${resp.code}")
+            val body = resp.body?.string() ?: "[]"
+            val arr = JSONArray(body)
+            return List(arr.length()) { i ->
+                val o = arr.getJSONObject(i)
+                CharacterLite(
+                    id = o.optString("id", ""),
+                    displayName = o.optString("display_name", o.optString("id", "?")),
+                    persona = if (o.isNull("persona")) null else o.optString("persona", "").ifBlank { null },
+                    voiceRef = o.optString("voice_ref", ""),
+                    meshPath = if (o.isNull("mesh_path")) null else o.optString("mesh_path", "").ifBlank { null },
+                )
+            }
+        }
+    }
+
+    /** POST /api/sessions/{session_id}/attach-character {"character_id": id} */
+    fun attachCharacter(sessionId: String, characterId: String) {
+        val body = JSONObject().put("character_id", characterId).toString().toRequestBody(JSON)
+        val req = buildBase("/api/sessions/$sessionId/attach-character").post(body).build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                throw IOException("attachCharacter HTTP ${resp.code}: ${resp.body?.string()}")
+            }
+        }
+    }
+
+    /** DELETE /api/sessions/{session_id}/character */
+    fun detachCharacter(sessionId: String) {
+        val req = buildBase("/api/sessions/$sessionId/character").delete().build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("detachCharacter HTTP ${resp.code}")
+        }
+    }
+
+    /** Recursively turn a nested Kotlin map / list into a JSONObject / JSONArray. */
+    private fun mapToJson(value: Any?): Any {
+        return when (value) {
+            null -> JSONObject.NULL
+            is Map<*, *> -> JSONObject().apply {
+                value.forEach { (k, v) -> put(k.toString(), mapToJson(v)) }
+            }
+            is List<*> -> JSONArray().apply {
+                value.forEach { put(mapToJson(it)) }
+            }
+            else -> value
+        }
+    }
 }
+
+/**
+ * CCT-32 Task A.1: full session state surface, merging the daemon's
+ * `state` and `resolved_cfg` blocks into a single Kotlin record so the
+ * UI doesn't have to know which side of the daemon's split each value
+ * comes from.
+ */
+data class SessionState(
+    val sessionId: String,
+    val cwd: String,
+    val attachedProfile: String?,
+    val attachedCharacterId: String?,
+    val activeMode: String,
+    val voiceEngine: String?,
+    val voiceModel: String?,
+    val cadence: String?,
+    val enabled: Boolean,
+    val markup: Map<String, MarkupTreatment>,
+)
+
+data class MarkupTreatment(val kind: String)
+
+data class VoiceLite(
+    val engine: String,
+    val model: String,
+    val displayName: String,
+)
+
+data class CharacterLite(
+    val id: String,
+    val displayName: String,
+    val persona: String?,
+    val voiceRef: String,
+    val meshPath: String?,
+)
 
 data class SessionLite(
     val sessionId: String,
