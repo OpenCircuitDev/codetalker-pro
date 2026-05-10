@@ -30,3 +30,14 @@ app/libs/*.jar
 .DS_Store
 Thumbs.db
 local.properties
+
+# Release signing — never commit a keystore or the file holding its
+# password. The release procedure lives in docs/DEVELOPER-GUIDE.md.
+*.keystore
+*.jks
+keystore.properties
+release-keystore.properties
+
+# Sentry secrets — DSN goes in BuildConfig via signing config, not in
+# the source tree.
+sentry.properties
