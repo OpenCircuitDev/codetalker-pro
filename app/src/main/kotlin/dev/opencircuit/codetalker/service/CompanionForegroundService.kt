@@ -51,6 +51,19 @@ class CompanionForegroundService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_PAUSE,
+            ACTION_RESUME,
+            ACTION_RECONNECT -> {
+                // CCT-32 Task B.5: paths are intentionally light — the
+                // service logs the request so it's visible in logcat and
+                // observable by E2E. Phase B.5 wires actual audio
+                // pause/resume into TTSPlayer when the player ownership
+                // moves into this service in Phase 8.
+                android.util.Log.i(
+                    "CompanionFg",
+                    "lifecycle action: ${intent.action}",
+                )
+            }
             else -> startInForeground()
         }
         return START_STICKY
@@ -122,6 +135,10 @@ class CompanionForegroundService : Service() {
         const val CHANNEL_ID = "cct_companion_fg"
         const val NOTIFICATION_ID = 1717
         const val ACTION_DISCONNECT = "dev.opencircuit.codetalker.ACTION_DISCONNECT"
+        // CCT-32 Task B.5: lifecycle action verbs sent by MainActivity.
+        const val ACTION_PAUSE = "dev.opencircuit.codetalker.ACTION_PAUSE"
+        const val ACTION_RESUME = "dev.opencircuit.codetalker.ACTION_RESUME"
+        const val ACTION_RECONNECT = "dev.opencircuit.codetalker.ACTION_RECONNECT"
 
         /** Convenience launcher used by MainActivity. */
         fun start(context: Context) {
@@ -137,6 +154,33 @@ class CompanionForegroundService : Service() {
             context.startService(
                 Intent(context, CompanionForegroundService::class.java).apply {
                     action = ACTION_DISCONNECT
+                },
+            )
+        }
+
+        /** CCT-32 Task B.5 — forwarded from MainActivity on screen-off. */
+        fun notifyPause(context: Context) {
+            context.startService(
+                Intent(context, CompanionForegroundService::class.java).apply {
+                    action = ACTION_PAUSE
+                },
+            )
+        }
+
+        /** CCT-32 Task B.5 — forwarded from MainActivity on screen-on. */
+        fun notifyResume(context: Context) {
+            context.startService(
+                Intent(context, CompanionForegroundService::class.java).apply {
+                    action = ACTION_RESUME
+                },
+            )
+        }
+
+        /** CCT-32 Task B.5 — forwarded from MainActivity on network-available. */
+        fun notifyReconnect(context: Context) {
+            context.startService(
+                Intent(context, CompanionForegroundService::class.java).apply {
+                    action = ACTION_RECONNECT
                 },
             )
         }

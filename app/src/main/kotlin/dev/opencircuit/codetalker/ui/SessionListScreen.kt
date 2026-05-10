@@ -1,7 +1,10 @@
 package dev.opencircuit.codetalker.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +38,9 @@ import androidx.compose.ui.unit.sp
 import dev.opencircuit.codetalker.net.DaemonClient
 import dev.opencircuit.codetalker.net.SessionLite
 import dev.opencircuit.codetalker.ui.character.CharacterChip
+import dev.opencircuit.codetalker.ui.errors.AppError
+import dev.opencircuit.codetalker.ui.errors.AppErrors
+import dev.opencircuit.codetalker.ui.errors.ErrorBanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -50,22 +56,29 @@ import kotlinx.coroutines.withContext
  * Phase 8 swaps this Compose screen for the AR HUD; this surface stays
  * as the before-glasses config layer.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SessionListScreen(
     daemonClient: DaemonClient,
     activeSessionId: String?,
     onSelect: (SessionLite) -> Unit,
     onUnpair: () -> Unit,
+    onLongPressMenu: () -> Unit = {},
 ) {
     var sessions by remember { mutableStateOf<List<SessionLite>>(emptyList()) }
-    var loadError by remember { mutableStateOf<String?>(null) }
+    // CCT-32 Task B.3: classify the load failure into an AppError so the
+    // user gets a recoverable banner with a Retry / Re-pair action instead
+    // of a raw exception message.
+    var loadError by remember { mutableStateOf<AppError?>(null) }
+    var reloadKey by remember { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
         try {
             val list = withContext(Dispatchers.IO) { daemonClient.listSessions() }
             sessions = list
+            loadError = null
         } catch (e: Throwable) {
-            loadError = e.message ?: "load failed"
+            loadError = AppErrors.fromThrowable(e)
         }
     }
 
@@ -75,13 +88,36 @@ fun SessionListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Sessions", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            // CCT-32 Task B.6: long-press the title to surface the menu
+            // (Diagnostics entry).
+            Text(
+                "Sessions",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                    onLongClick = onLongPressMenu,
+                ),
+            )
             OutlinedButton(onClick = onUnpair) { Text("Unpair") }
         }
         Spacer(Modifier.height(8.dp))
 
-        loadError?.let {
-            Text("Could not load: $it", fontSize = 13.sp)
+        loadError?.let { err ->
+            ErrorBanner(
+                error = err,
+                onAction = { e ->
+                    when (e.recovery) {
+                        AppError.Recovery.Retry -> { loadError = null; reloadKey++ }
+                        AppError.Recovery.RePair -> onUnpair()
+                        AppError.Recovery.OpenSettings -> { /* not reachable from list */ }
+                        AppError.Recovery.None -> { /* nothing actionable */ }
+                    }
+                },
+                onDismiss = { loadError = null },
+            )
             return@Column
         }
         if (sessions.isEmpty()) {

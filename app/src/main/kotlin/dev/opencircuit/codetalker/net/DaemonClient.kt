@@ -46,6 +46,16 @@ class DaemonClient(
             .url("$baseUrl$path")
             .header(HEADER_TOKEN, pairingToken)
 
+    /** GET /api/health — returns true on 200, throws otherwise.
+     *  Used by [dev.opencircuit.codetalker.ui.DiagnosticsScreen] to
+     *  surface daemon last-success + token status. */
+    fun getHealthOrThrow() {
+        val req = buildBase("/api/health").build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("health HTTP ${resp.code}")
+        }
+    }
+
     /** GET /api/companion/sessions */
     fun listSessions(): List<SessionLite> {
         val req = buildBase("/api/companion/sessions").build()
