@@ -1,6 +1,7 @@
 package dev.opencircuit.codetalker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -53,11 +53,12 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SessionListScreen(
     daemonClient: DaemonClient,
+    activeSessionId: String?,
+    onSelect: (SessionLite) -> Unit,
     onUnpair: () -> Unit,
 ) {
     var sessions by remember { mutableStateOf<List<SessionLite>>(emptyList()) }
     var loadError by remember { mutableStateOf<String?>(null) }
-    var activeId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         try {
@@ -95,16 +96,8 @@ fun SessionListScreen(
             items(sessions, key = { it.sessionId }) { session ->
                 SessionRow(
                     session = session,
-                    isActive = activeId == session.sessionId,
-                    onSetActive = {
-                        activeId = session.sessionId
-                        // Phase 7+ wires the active selection to:
-                        //   - daemonClient.setActiveSession(sessionId) so the
-                        //     daemon routes the right audio stream to us
-                        //   - daemonClient.startBuddy(sessionId) so the buddy
-                        //     Claude has access to this session's transcript
-                        // Both happen in CompanionViewModel (Phase 8).
-                    },
+                    isActive = activeSessionId == session.sessionId,
+                    onClick = { onSelect(session) },
                 )
             }
         }
@@ -115,11 +108,16 @@ fun SessionListScreen(
 private fun SessionRow(
     session: SessionLite,
     isActive: Boolean,
-    onSetActive: () -> Unit,
+    onClick: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick),
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Top line: live indicator + display name
+            // Top line: live indicator + display name + active flag
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (session.isLive) {
                     LiveDot()
@@ -130,6 +128,15 @@ private fun SessionRow(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 16.sp,
                 )
+                if (isActive) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "ACTIVE",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF34D399),
+                    )
+                }
             }
             Text(
                 session.sessionId.take(12),
@@ -140,11 +147,6 @@ private fun SessionRow(
             session.attachedCharacter?.let { char ->
                 Spacer(Modifier.height(8.dp))
                 CharacterChip(character = char)
-            }
-
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onSetActive) {
-                Text(if (isActive) "Active" else "Set active")
             }
         }
     }
