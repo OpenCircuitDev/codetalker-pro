@@ -31,6 +31,9 @@ import dev.opencircuit.codetalker.ui.PairingScreen
 import dev.opencircuit.codetalker.ui.PreferencesScreen
 import dev.opencircuit.codetalker.ui.SessionDetailScreen
 import dev.opencircuit.codetalker.ui.SessionListScreen
+import dev.opencircuit.codetalker.telemetry.ConsentDialog
+import dev.opencircuit.codetalker.telemetry.ConsentFlow
+import dev.opencircuit.codetalker.telemetry.CrashReporter
 import dev.opencircuit.codetalker.ui.permissions.PermissionCatalog
 import dev.opencircuit.codetalker.ui.permissions.PermissionGate
 import dev.opencircuit.codetalker.ui.theme.CodetalkerTheme
@@ -83,6 +86,19 @@ class MainActivity : ComponentActivity() {
         screenStateObserver.register(applicationContext)
         val cm = applicationContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         networkStateObserver = dev.opencircuit.codetalker.service.NetworkStateObserver(cm).also { it.register() }
+
+        // CCT-32 Task G.1 — initialize Sentry only if the user has opted
+        // in. The init guard inside CrashReporter additionally checks the
+        // build-config DSN; with empty DSN the SDK never starts even when
+        // the toggle is on. Re-runs on every onCreate are no-ops thanks
+        // to the idempotent guard.
+        viewModelScope.launch {
+            appPreferences.crashReportingEnabled.collectLatest { enabled ->
+                if (enabled) {
+                    CrashReporter.init(this@MainActivity, enabled = true)
+                }
+            }
+        }
 
         // CCT-31 Phase 10a: keep audio + SSE alive when the app backgrounds.
         // Only start the service if the user has paired — no point holding a
@@ -208,6 +224,26 @@ private fun CompanionRoot(
         )
         registerViewModel(null)
         return
+    }
+
+    // CCT-32 Task G.2 — first-launch consent dialog. Shows once after
+    // onboarding when crash-reporting consent has not yet been asked.
+    val consentFlow = remember(appPreferences) { ConsentFlow(appPreferences) }
+    val showConsent by consentFlow.shouldShowConsent.collectAsState(initial = false)
+    if (showConsent) {
+        ConsentDialog(
+            onAccept = {
+                kotlinx.coroutines.MainScope().launch(Dispatchers.IO) {
+                    consentFlow.recordConsent(enabled = true)
+                }
+            },
+            onDecline = {
+                kotlinx.coroutines.MainScope().launch(Dispatchers.IO) {
+                    consentFlow.recordDecline()
+                }
+            },
+        )
+        // Don't return — the rest of the UI renders behind the dialog.
     }
 
     // CCT-32 Task B.1: permission rationale gate. Run before any screen
