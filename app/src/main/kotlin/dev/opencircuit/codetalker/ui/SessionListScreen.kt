@@ -11,7 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.DisposableEffect
+import dev.opencircuit.codetalker.SttMode
 import dev.opencircuit.codetalker.input.CompanionButtonHandler
 import dev.opencircuit.codetalker.net.DaemonClient
 import dev.opencircuit.codetalker.net.SessionLite
@@ -110,6 +113,15 @@ fun SessionListScreen(
      *  to respect user-driven de-activations. */
     onAutoSubscribeMissing: (Set<String>) -> Unit = {},
     setScreenButtonHandler: (CompanionButtonHandler?) -> Unit = {},
+    /** 2026-05-17 — per-card hold-to-talk. Press-down fires
+     *  [onHoldStart] with the card's session_id and the desired
+     *  [SttMode]; release fires [onHoldEnd]. Replaces the volume-rocker
+     *  long-press path that used to drive Buddy + Direct STT (the rocker
+     *  is now released for system volume control).
+     *
+     *  Null defaults keep older callers + previews working. */
+    onHoldStart: ((sessionId: String, mode: SttMode) -> Unit)? = null,
+    onHoldEnd: (() -> Unit)? = null,
 ) {
     var sessions by remember { mutableStateOf<List<SessionLite>>(emptyList()) }
     // 2026-05-11 Tier-B — auto-subscribe state. Tracks SIDs we've already
@@ -584,6 +596,15 @@ fun SessionListScreen(
                                     }
                                 }
                             },
+                            // 2026-05-17 — per-card hold-to-talk handlers.
+                            // Captures the row's session_id at bind-time so
+                            // the recording always dispatches to the right
+                            // session, even if the user scrolls or another
+                            // row becomes active mid-press.
+                            onHoldStart = onHoldStart?.let { fn ->
+                                { mode -> fn(session.sessionId, mode) }
+                            },
+                            onHoldEnd = onHoldEnd,
                         )
                     }
                 }
@@ -669,6 +690,11 @@ private fun SessionRow(
      *  Previously the indicator was a static label; now it's interactive
      *  so users don't have to dive into SessionDetail to turn it off. */
     onToggleAuto: () -> Unit = {},
+    /** 2026-05-17 — per-card hold-to-talk. When both [onHoldStart] and
+     *  [onHoldEnd] are non-null, the row renders a two-button row at the
+     *  bottom for Buddy STT and Direct-STT. Null hides the row. */
+    onHoldStart: ((SttMode) -> Unit)? = null,
+    onHoldEnd: (() -> Unit)? = null,
 ) {
     val nowSec = System.currentTimeMillis() / 1000.0
     val isRecentlyActive = session.isLive && (nowSec - session.lastHookAt < 10.0)
@@ -782,6 +808,89 @@ private fun SessionRow(
                 Spacer(Modifier.height(8.dp))
                 CharacterChip(character = c)
             }
+
+            // 2026-05-17 — fat hold-to-talk row. Two thumb-sized buttons,
+            // one per STT route. Press-down starts the recorder for THIS
+            // session_id; release dispatches via the buddy LLM (Buddy) or
+            // SendKeys into the active CC window (Dictate). Replaces the
+            // volume-rocker long-press bindings — the rocker is now back
+            // to system volume control.
+            if (onHoldStart != null && onHoldEnd != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HoldToTalkButton(
+                        modifier = Modifier.weight(1f),
+                        label = "🎙 Buddy",
+                        pressedLabel = "Listening…",
+                        accentColor = Color(0xFF60A5FA),
+                        onPress = { onHoldStart(SttMode.BUDDY) },
+                        onRelease = onHoldEnd,
+                    )
+                    HoldToTalkButton(
+                        modifier = Modifier.weight(1f),
+                        label = "⌨ Dictate",
+                        pressedLabel = "Listening…",
+                        accentColor = Color(0xFFFB923C),
+                        onPress = { onHoldStart(SttMode.DIRECT_CC) },
+                        onRelease = onHoldEnd,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 2026-05-17 — hold-to-talk button. Press-down fires [onPress], release
+ * fires [onRelease]. Background lifts on press so the user has visual
+ * feedback that the recorder is live. ~48dp tall to comfortably hold a
+ * thumb during dictation.
+ */
+@Composable
+private fun HoldToTalkButton(
+    modifier: Modifier = Modifier,
+    label: String,
+    pressedLabel: String,
+    accentColor: Color,
+    onPress: () -> Unit,
+    onRelease: () -> Unit,
+) {
+    var pressed by remember { mutableStateOf(false) }
+    val bg = if (pressed) accentColor.copy(alpha = 0.35f) else accentColor.copy(alpha = 0.15f)
+    Surface(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        onPress()
+                        // tryAwaitRelease suspends until ACTION_UP or
+                        // cancellation; either way we run the dispatch
+                        // path so the recorder isn't left hot.
+                        tryAwaitRelease()
+                        pressed = false
+                        onRelease()
+                    },
+                )
+            },
+        color = bg,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.6f)),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 12.dp),
+        ) {
+            Text(
+                if (pressed) pressedLabel else label,
+                color = accentColor,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

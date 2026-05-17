@@ -131,6 +131,33 @@ class CompanionViewModel(
     }
 
     /**
+     * 2026-05-17 — per-session-card hold-to-talk entry point. Replaces the
+     * volume-rocker long-press hardware path (which was unbound so system
+     * volume control works normally).
+     *
+     * Call this from the card button's press-down (ACTION_DOWN); pair with
+     * [endHoldToTalk] on release (ACTION_UP). Each press pins the STT
+     * round-trip to the given [sessionId] and [mode], independent of which
+     * session was last active globally — so the user can dictate to BF
+     * Skills from a card while CodeTalker is the audio-focused session.
+     *
+     * Internally re-uses [handleButtonState] so the STT recorder + caption
+     * stream + dispatch pipeline stay identical to the legacy flow.
+     */
+    fun startHoldToTalk(sessionId: String, mode: SttMode) {
+        activeSessionId.value = sessionId
+        sttMode.value = mode
+        handleButtonState(ButtonState.Listening)
+    }
+
+    /** Release-half of [startHoldToTalk]. Stops the recorder and dispatches
+     *  the final transcript via inject() (BUDDY) or directStt() (DIRECT_CC),
+     *  depending on the mode the press started with. */
+    fun endHoldToTalk() {
+        handleButtonState(ButtonState.DispatchListening)
+    }
+
+    /**
      * v0.1.0 polish — public hook for the SessionDetail Chat tab so typed
      * messages can be sent to the buddy without going through the STT path.
      * Same plumbing as dispatch() but takes explicit text.

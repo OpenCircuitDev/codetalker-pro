@@ -692,6 +692,12 @@ private fun CompanionRoot(
                     }
                 },
                 setScreenButtonHandler = setScreenButtonHandler,
+                // 2026-05-17 — per-card hold-to-talk wiring. The card
+                // captures its own session_id at bind-time and calls
+                // startHoldToTalk(sid, mode). Replaces the volume-rocker
+                // long-press path (now released for system volume).
+                onHoldStart = { sid, mode -> viewModel.startHoldToTalk(sid, mode) },
+                onHoldEnd = { viewModel.endHoldToTalk() },
             )
         }
         }

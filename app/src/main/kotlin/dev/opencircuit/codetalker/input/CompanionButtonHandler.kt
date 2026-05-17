@@ -10,34 +10,35 @@ package dev.opencircuit.codetalker.input
  * registration (events fall through to the legacy ButtonRouter for the
  * existing in-glasses voice flow).
  *
- * Button → ButtonInput mapping (2026-05-12 binding move):
+ * Button → ButtonInput mapping (2026-05-17 binding move):
  *
  * | Hardware              | Short press         | Long press (>300ms)     |
  * |-----------------------|---------------------|-------------------------|
  * | Side button           | [ButtonInput.Click] | — (unbound; system kept)|
- * | Volume DOWN rocker    | [ButtonInput.RockerDown] | [ButtonInput.LongPress] + [ButtonInput.HoldEnd] on release |
- * | Volume UP rocker      | [ButtonInput.RockerUp]   | (no long-press)         |
+ * | Volume UP / DOWN      | (system default — volume) | (system default)  |
+ *
+ * 2026-05-17 — STT moved OFF the volume rocker and ONTO per-session-card
+ * buttons (Buddy + Dictate hold-to-talk). The volume rocker is now released
+ * back to system handling so the user can adjust media / notification /
+ * call volume normally while the app is foregrounded. The LongPress /
+ * LongPressUp / RockerUp / RockerDown ButtonInput variants are kept in the
+ * sealed type for legacy in-glasses flows but no longer fire from hardware.
  *
  * Per-screen semantics:
  *
- * | Screen          | Click               | Vol-DOWN hold       | Vol-UP hold              | Vol-up tap     | Vol-down tap   |
- * |-----------------|---------------------|---------------------|--------------------------|----------------|----------------|
- * | SessionList     | Select highlighted  | —                   | —                        | Highlight ↑    | Highlight ↓    |
- * | SessionDetail   | Toggle mute         | Buddy STT           | Direct-STT into CC       | Mode → live    | Mode → brief   |
+ * | Screen          | Side-button click   | Per-card Buddy hold | Per-card Dictate hold |
+ * |-----------------|---------------------|---------------------|------------------------|
+ * | SessionList     | Select highlighted  | Buddy STT (that sid)| Direct-STT (that sid)  |
+ * | SessionDetail   | Toggle mute         | (same)              | (same)                 |
  *
  * The two STT routes are distinct products:
- *   - Buddy STT (vol-down hold) → /api/companion/inject → intermediate LLM
- *     agent → response narrated back. Lightweight Q&A.
- *   - Direct-STT (vol-up hold) → /api/companion/direct-stt → daemon types
- *     the transcript into the OS-foreground window (presumed CC session)
- *     via SendKeys, then Enter. Wireless dictation mic for the active
- *     Claude Code session; reply auto-narrates via existing hook pipeline.
- *
- * Rationale for moving STT from side-button long-press to vol-down long-press:
- * the side button has system defaults (power menu on POWER-mapped firmware)
- * that are valuable to preserve. Vol-down's only conflict is the Android
- * Assistant launch gesture, which (a) only fires when the foreground app
- * doesn't consume the event, and (b) can be disabled in OS Settings.
+ *   - Buddy STT (per-card Buddy hold) → /api/companion/inject → intermediate
+ *     LLM agent → response narrated back. Lightweight Q&A about the session.
+ *   - Direct-STT (per-card Dictate hold) → /api/companion/direct-stt → daemon
+ *     types the transcript into the OS-foreground window (presumed CC
+ *     session) via SendKeys, then Enter. Wireless dictation mic for the
+ *     target Claude Code session; reply auto-narrates via existing hook
+ *     pipeline.
  *
  * Implementations default each method to no-op so callers only override what
  * they handle.

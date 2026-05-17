@@ -17,37 +17,24 @@ import android.view.KeyEvent
  * hardware events come in as ACTION_DOWN/UP pairs; we need to debounce +
  * window-detect at this layer.
  *
- * 2026-05-12 binding move: STT hold-to-talk migrated from the side button
- * to volume-DOWN long-press. Rationale: the side button has system
- * defaults (e.g., power-menu on POWER-mapped firmware) that are useful to
- * preserve; binding STT there created collisions. Volume-down has no
- * critical system default beyond Assistant launch (which can be disabled
- * in Settings and which our `dispatchKeyEvent` suppresses for foreground
- * input anyway). Side button now only emits [ButtonInput.Click] (toggle
- * mute on SessionDetail); it no longer emits LongPress/HoldEnd.
+ * 2026-05-17 binding move: STT hold-to-talk migrated OFF the volume rocker
+ * and ONTO per-session-card buttons (see SessionListScreen). Rationale:
+ * binding hold-to-talk to vol-UP / vol-DOWN consumed the rocker entirely,
+ * leaving the user no way to adjust system audio volume while the app is
+ * foregrounded. With STT now invoked from on-card buttons, the volume
+ * rocker is released back to system handling so notification + media +
+ * call volume work normally.
+ *
+ * Side button still emits [ButtonInput.Click] (toggle mute on
+ * SessionDetail; trigger voice-flow on the legacy in-glasses path).
  */
 class HardwareKeys(
     private val onInput: (ButtonInput) -> Unit,
     // Lowered from 700ms → 300ms during CCT-32 v0.1.0 polish so press-and-hold
-    // semantics feel snappy for the STT "hold to talk" gesture.
+    // semantics feel snappy. Still relevant for the side-button if it ever
+    // grows a long-press binding; volume rocker no longer uses this.
     var longPressMs: Long = 300,
 ) {
-    private val volumeDown = LongPressDetector(
-        onShortClick = { onInput(ButtonInput.RockerDown) },
-        onLongPress = { onInput(ButtonInput.LongPress) },
-        onHoldEnd = { onInput(ButtonInput.HoldEnd) },
-        longPressMsProvider = { longPressMs },
-    )
-    // 2026-05-12 — vol-UP gains long-press detection for direct-STT
-    // (vol-down handles Buddy STT; vol-up routes transcript via the
-    // daemon's /api/companion/direct-stt → SendKeys into the user's CC
-    // window). Short-tap still emits RockerUp (Mode → live).
-    private val volumeUp = LongPressDetector(
-        onShortClick = { onInput(ButtonInput.RockerUp) },
-        onLongPress = { onInput(ButtonInput.LongPressUp) },
-        onHoldEnd = { onInput(ButtonInput.HoldEndUp) },
-        longPressMsProvider = { longPressMs },
-    )
     private val sideButton = LongPressDetector(
         onShortClick = { onInput(ButtonInput.Click) },
         onLongPress = { /* intentionally unbound — system keeps long-press default */ },
@@ -56,17 +43,14 @@ class HardwareKeys(
     )
 
     /** Returns true if the event was consumed; the Activity should pass that
-     *  return value back from dispatchKeyEvent to suppress system handling. */
+     *  return value back from dispatchKeyEvent to suppress system handling.
+     *
+     *  Volume rocker (VOLUME_UP / VOLUME_DOWN) intentionally NOT handled here:
+     *  we want system volume control to work normally now that STT lives on
+     *  per-card buttons. Returning false for those keycodes (the `else` branch)
+     *  lets Android handle them. */
     fun handle(event: KeyEvent): Boolean {
         return when (event.keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP -> {
-                volumeUp.handle(event)
-                true
-            }
-            KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                volumeDown.handle(event)
-                true
-            }
             KeyEvent.KEYCODE_HEADSETHOOK,
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
             KeyEvent.KEYCODE_CAMERA -> {
