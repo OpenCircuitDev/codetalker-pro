@@ -396,79 +396,65 @@ private fun CompanionRoot(
         // exist) and PUSH the survivors back to the daemon so its audio
         // routing has a target. DataStore is updated to the cleaned set
         // so the stale entries don't keep coming back next launch.
-        // 2026-05-16 -- Active-set reconciliation. Both the daemon's
-        // companion-active list AND the phone's DataStore restored list
-        // can carry stale sids across restarts. Always validate against
-        // CURRENT recent activity (sessions touched in the last 60 min,
-        // matching the SessionListScreen Active filter). Drop the rest
-        // so the audio-subscriber set is clean and the phone doesn't
-        // poll long-dead sessions.
-        androidx.compose.runtime.LaunchedEffect(current) {
-            try {
-                val now = System.currentTimeMillis() / 1000.0
-                val recencyWindowSec = 60 * 60.0
-                val recentSids: Set<String> = try {
-                    withContext(Dispatchers.IO) {
-                        client.listSessions()
-                            .filter { s ->
-                                s.isLive ||
-                                    (s.lastModified > 0.0 && (now - s.lastModified) < recencyWindowSec)
-                            }
-                            .map { it.sessionId }
-                            .toSet()
-                    }
-                } catch (_: Throwable) { emptySet() }
-
-                val remoteSet = withContext(Dispatchers.IO) { client.getActiveSessions() }
-                val localSet = if (persistedActiveIds.isNotEmpty()) {
-                    persistedActiveIds
-                } else if (persistedActiveId != null) {
-                    setOf(persistedActiveId!!)
-                } else emptySet()
-
-                // Union both sources, then intersect with recent. The
-                // union preserves any sid either side knows about; the
-                // intersection drops anything older than 60 minutes.
-                //
-                // 2026-05-16 — if recentSids is empty (daemon transiently
-                // unreachable, mid-restart, or listSessions threw and the
-                // catch returned emptySet()), DO NOT interpret that as
-                // "everything is stale, wipe the user's set". That bug
-                // was destroying activeSessionIds every time the daemon
-                // restarted, leaving no pollers running and no audio
-                // flowing to the phone. Preserve the union instead and
-                // let the next reconciliation tick (when the daemon is
-                // healthy again) actually filter for staleness.
-                val union = remoteSet + localSet
-                val recencyKnown = recentSids.isNotEmpty()
-                val cleaned = if (recencyKnown) union.intersect(recentSids) else union
-
-                // For sids the daemon currently has active but should NOT
-                // (stale, outside recency window), explicitly deactivate
-                // so the daemon's companion_active_sessions also stays
-                // clean across restarts. Gated on recencyKnown so a
-                // transient daemon outage never deactivates the user's
-                // real active set.
-                if (recencyKnown) {
-                    val toDeactivate = remoteSet - cleaned
-                    for (sid in toDeactivate) {
-                        try { withContext(Dispatchers.IO) { client.toggleActiveSession(sid, false) } } catch (_: Throwable) {}
+        // 2026-05-16 Option C — bidirectional active-set sync via SSE.
+        //
+        // Replaces the previous reconciliation LaunchedEffect, which had
+        // accumulated eight different known failure modes (intersecting
+        // with stale recentSids, wiping on transient daemon errors,
+        // dropping sids when Claude had been idle >60 min, etc). The
+        // recurring shape was "read-side overriding write-side state."
+        //
+        // New model:
+        //   - Phone's DataStore is the source of truth for the user's
+        //     active session set
+        //   - On SSE (re)connect, phone PUSHES that set to the daemon
+        //     so Strategy-C routing has the right targets
+        //   - Daemon emits CompanionActiveSessionsChanged after every
+        //     mutation; phone mirrors local state to match
+        //   - Toggle handlers (below) update local state immediately for
+        //     UI responsiveness AND POST to the daemon, which echoes
+        //     the change back via the event (idempotent on receive)
+        //
+        // No polling, no recency heuristics, no silent state drift.
+        androidx.compose.runtime.LaunchedEffect(daemonEvents, persistedActiveIds, persistedActiveId) {
+            if (daemonEvents == null) return@LaunchedEffect
+            daemonEvents.connections.collect {
+                // Choose canonical set: prefer in-memory if non-empty
+                // (user may have toggled since restore), else fall back
+                // to persisted, else the legacy single-slot id.
+                val toPush = when {
+                    activeSessionIds.isNotEmpty() -> activeSessionIds
+                    persistedActiveIds.isNotEmpty() -> persistedActiveIds
+                    persistedActiveId != null -> setOf(persistedActiveId!!)
+                    else -> emptySet()
+                }
+                if (toPush.isEmpty()) return@collect
+                withContext(Dispatchers.IO) {
+                    for (sid in toPush) {
+                        try { client.toggleActiveSession(sid, true) } catch (_: Throwable) {}
                     }
                 }
-                // For sids in the cleaned set that the daemon isn't yet
-                // tracking, push them up so audio routing has them.
-                val toActivate = cleaned - remoteSet
-                for (sid in toActivate) {
-                    try { withContext(Dispatchers.IO) { client.toggleActiveSession(sid, true) } } catch (_: Throwable) {}
+            }
+        }
+        androidx.compose.runtime.LaunchedEffect(daemonEvents) {
+            if (daemonEvents == null) return@LaunchedEffect
+            daemonEvents.events.collect { ev ->
+                if (ev.eventType != "CompanionActiveSessionsChanged") return@collect
+                val arr = ev.data.optJSONArray("active_session_ids")
+                val newSet = mutableSetOf<String>()
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val s = arr.optString(i, "")
+                        if (s.isNotEmpty()) newSet.add(s)
+                    }
                 }
-
-                activeSessionIds = cleaned
-                activeSessionId = cleaned.sorted().firstOrNull()
-                appPreferences.setActiveSessionIds(cleaned)
-            } catch (_: Throwable) {
-                // Daemon unreachable on first try is fine -- DataStore
-                // fallback already populated the local set from
-                // persistedActiveIds.
+                if (newSet != activeSessionIds) {
+                    activeSessionIds = newSet
+                    activeSessionId = newSet.sorted().firstOrNull()
+                    GlobalScope.launch(Dispatchers.IO) {
+                        appPreferences.setActiveSessionIds(newSet)
+                    }
+                }
             }
         }
         // CCT-32 Task A.8: build (or rebuild) the coordinator when pairing changes.
