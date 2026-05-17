@@ -516,6 +516,25 @@ private fun CompanionRoot(
                 ttsPlayer.stop()
             }
         }
+        // 2026-05-16 — Force-respawn pollers on app foreground. A daemon
+        // restart while we're backgrounded leaves no failure signal that
+        // reaches the app (Doze suspends network callbacks), so without
+        // this kick the pollers may hold half-closed sockets that hang on
+        // read until readTimeout, producing minutes of silence after the
+        // daemon comes back. Respawn is idempotent and cheap when the
+        // pool is already healthy.
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        androidx.compose.runtime.DisposableEffect(lifecycleOwner, ttsPlayer) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    ttsPlayer.respawnAllPollers()
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
+        }
         if (showingDiagnostics) {
             dev.opencircuit.codetalker.ui.DiagnosticsScreen(
                 daemonClient = client,

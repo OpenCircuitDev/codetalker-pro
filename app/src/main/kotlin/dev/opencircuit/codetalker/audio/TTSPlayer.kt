@@ -179,6 +179,37 @@ class TTSPlayer(
     }
 
     /**
+     * 2026-05-16 — force every active poller to be cancelled and respawned
+     * with a fresh OkHttp connection pool. Use this when an external signal
+     * suggests in-flight long-polls may be silently stale:
+     *   - daemon process restarted (its TCP listener died; pooled sockets
+     *     in OkHttp are half-closed and may write OK but never read);
+     *   - app returned to foreground after a long background period
+     *     (Doze/standby may have invalidated NAT mappings);
+     *   - NetworkStateObserver.reconnectTick incremented (Wi-Fi restored).
+     *
+     * Idempotent and cheap when called with healthy connections — the only
+     * cost is one extra round-trip per active poller. Without this method,
+     * `setActiveSessions(currentSet)` is a no-op (it only spawns pollers
+     * for sids NOT already present in the map), so a stuck poller stays
+     * stuck until the user explicitly toggles its sid off then back on.
+     */
+    fun respawnAllPollers() {
+        val currentSet = _activeSessionIds.value
+        Log.w("TTSPlayer", "respawnAllPollers count=${pollers.size} -> ${currentSet.size}")
+        pollers.values.forEach { it.cancel() }
+        pollers.clear()
+        // Evict pooled sockets so retries use fresh TCP. Without this, a
+        // restarted daemon can leave OkHttp serving half-closed connections
+        // that hang on read until readTimeout (60s) — multiplying the
+        // post-restart silence window.
+        try { httpClient.connectionPool.evictAll() } catch (_: Throwable) {}
+        for (sid in currentSet) {
+            pollers[sid] = scope.launch { pollerLoop(sid) }
+        }
+    }
+
+    /**
      * Long-poll one session for WAVs. Each iteration fetches one bounded WAV
      * (or 204 No Content if nothing's queued) and pushes it into the shared
      * channel. Re-polls immediately on success, with light backoff on errors.
@@ -218,6 +249,14 @@ class TTSPlayer(
                 // window has already elapsed, so no extra delay is needed.
             } catch (e: Throwable) {
                 Log.w("TTSPlayer", "poller(${sessionId.take(8)}) error: ${e.message}")
+                // 2026-05-16 — evict pooled sockets after every error so the
+                // next retry establishes a fresh TCP connection. Without
+                // this, a half-closed connection from a restarted daemon
+                // can persist in the pool and cause every subsequent
+                // request to hang for the full readTimeout (60s) before
+                // erroring, multiplying the post-restart silence window
+                // by every retry attempt.
+                try { httpClient.connectionPool.evictAll() } catch (_: Throwable) {}
                 delay(backoffMs)
                 backoffMs = (backoffMs * 2).coerceAtMost(5_000L)
             }
