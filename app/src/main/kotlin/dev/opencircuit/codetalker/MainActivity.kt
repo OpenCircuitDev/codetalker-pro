@@ -429,16 +429,31 @@ private fun CompanionRoot(
                 // Union both sources, then intersect with recent. The
                 // union preserves any sid either side knows about; the
                 // intersection drops anything older than 60 minutes.
+                //
+                // 2026-05-16 — if recentSids is empty (daemon transiently
+                // unreachable, mid-restart, or listSessions threw and the
+                // catch returned emptySet()), DO NOT interpret that as
+                // "everything is stale, wipe the user's set". That bug
+                // was destroying activeSessionIds every time the daemon
+                // restarted, leaving no pollers running and no audio
+                // flowing to the phone. Preserve the union instead and
+                // let the next reconciliation tick (when the daemon is
+                // healthy again) actually filter for staleness.
                 val union = remoteSet + localSet
-                val cleaned = if (recentSids.isNotEmpty()) union.intersect(recentSids) else emptySet()
+                val recencyKnown = recentSids.isNotEmpty()
+                val cleaned = if (recencyKnown) union.intersect(recentSids) else union
 
                 // For sids the daemon currently has active but should NOT
                 // (stale, outside recency window), explicitly deactivate
                 // so the daemon's companion_active_sessions also stays
-                // clean across restarts.
-                val toDeactivate = remoteSet - cleaned
-                for (sid in toDeactivate) {
-                    try { withContext(Dispatchers.IO) { client.toggleActiveSession(sid, false) } } catch (_: Throwable) {}
+                // clean across restarts. Gated on recencyKnown so a
+                // transient daemon outage never deactivates the user's
+                // real active set.
+                if (recencyKnown) {
+                    val toDeactivate = remoteSet - cleaned
+                    for (sid in toDeactivate) {
+                        try { withContext(Dispatchers.IO) { client.toggleActiveSession(sid, false) } } catch (_: Throwable) {}
+                    }
                 }
                 // For sids in the cleaned set that the daemon isn't yet
                 // tracking, push them up so audio routing has them.
