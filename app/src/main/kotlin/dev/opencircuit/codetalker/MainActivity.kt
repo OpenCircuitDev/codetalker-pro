@@ -511,11 +511,24 @@ private fun CompanionRoot(
         // 2026-05-11 — multi-active. Tell TTSPlayer the full set; it manages
         // N parallel pollers and sequential playback through one ExoPlayer.
         // Compose re-runs this whenever the set changes (any toggle).
-        androidx.compose.runtime.DisposableEffect(activeSessionIds) {
+        //
+        // 2026-05-17 — separated set-update from teardown. Previously this
+        // was a single DisposableEffect(activeSessionIds) whose onDispose
+        // called ttsPlayer.stop() — which CANCELLED ALL POLLERS on every
+        // single activeSessionIds change. With Option C bidirectional sync
+        // emitting CompanionActiveSessionsChanged events in bursts, that
+        // teardown fired repeatedly per second, never letting pollers
+        // long-poll long enough for the daemon to register a subscriber.
+        // Result: companion-side WAVs published with no subscriber, all
+        // dropped. Now: LaunchedEffect just calls setActiveSessions on
+        // change (which does its own diff: cancels only removed sids,
+        // spawns only new sids — no thrash), and a separate
+        // DisposableEffect(ttsPlayer) handles activity-teardown cleanup.
+        androidx.compose.runtime.LaunchedEffect(activeSessionIds) {
             ttsPlayer.setActiveSessions(activeSessionIds)
-            onDispose {
-                ttsPlayer.stop()
-            }
+        }
+        androidx.compose.runtime.DisposableEffect(ttsPlayer) {
+            onDispose { ttsPlayer.stop() }
         }
         // 2026-05-16 — Force-respawn pollers on app foreground. A daemon
         // restart while we're backgrounded leaves no failure signal that
