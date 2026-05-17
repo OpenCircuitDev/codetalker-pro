@@ -662,11 +662,11 @@ private fun FilterChipsRow(
     counts: Map<String, Int>,
     onChange: (String) -> Unit,
 ) {
-    // 2026-05-16 -- four pills mirror the recently-active state machine:
-    // Active (all recently-active), Live (mode=live), Brief (mode=brief),
-    // Muted (enabled=false). Live and Brief reflect speaking-mode
-    // choices, not recency. Mute is the action that moves a session
-    // from Live/Brief to Muted.
+    // 2026-05-17 — five pills (added Teacher) overflow narrow-screen
+    // width, which caused some chip labels to wrap to two lines and
+    // gave the chip-row an unpredictable height. Switched to a
+    // horizontally-scrollable LazyRow so chips keep a fixed height
+    // regardless of how many are added.
     val pills = listOf(
         "active" to "Active",
         "live" to "Live",
@@ -674,13 +674,16 @@ private fun FilterChipsRow(
         "teacher" to "Teacher",
         "muted" to "Muted",
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        pills.forEach { (key, label) ->
+    androidx.compose.foundation.lazy.LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(end = 8.dp),
+    ) {
+        items(pills) { (key, label) ->
             val count = counts[key] ?: 0
             FilterChip(
                 selected = current == key,
                 onClick = { onChange(key) },
-                label = { Text("$label · $count", fontSize = 12.sp) },
+                label = { Text("$label · $count", fontSize = 12.sp, maxLines = 1) },
                 colors = FilterChipDefaults.filterChipColors(),
             )
         }
