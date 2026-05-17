@@ -348,10 +348,35 @@ private fun CompanionRoot(
             daemonEvents.connect()
             onDispose { daemonEvents.close() }
         }
+        // Phase 7 (2026-05-16) — AR HUD on Display 6 (XREAL One Pro).
+        // Watches for an external display; when one attaches, opens a
+        // Presentation that renders subtitle-style captions fed by the
+        // daemon's /api/narration-stream SSE. When the display
+        // detaches (glasses unplugged), dismisses the Presentation.
+        // The host ComponentActivity acts as BOTH LifecycleOwner and
+        // SavedStateRegistryOwner since AbstractComposeView attached
+        // to the Presentation's content view requires both.
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val compositionContext = androidx.compose.runtime.rememberCompositionContext()
+        val glassesHud = remember(current) {
+            val hostActivity = ctx as androidx.activity.ComponentActivity
+            dev.opencircuit.codetalker.hud.GlassesHudController(
+                appContext = hostActivity.applicationContext,
+                daemonBaseUrl = current.daemonUrl,
+                lifecycleOwner = hostActivity,
+                savedStateOwner = hostActivity,
+                compositionContext = compositionContext,
+            )
+        }
+        androidx.compose.runtime.DisposableEffect(glassesHud) {
+            glassesHud.start()
+            onDispose { glassesHud.close() }
+        }
         // Expose via CompositionLocal so deeply-nested screens can
         // collect without prop-drilling.
         androidx.compose.runtime.CompositionLocalProvider(
             LocalDaemonEvents provides daemonEvents,
+            dev.opencircuit.codetalker.hud.LocalGlassesHudController provides glassesHud,
         ) {
         // 2026-05-11 — hydrate the local active set from the daemon on first
         // composition with this pairing. The daemon is the source of truth
