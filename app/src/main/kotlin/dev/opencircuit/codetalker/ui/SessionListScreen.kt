@@ -60,6 +60,7 @@ import androidx.compose.runtime.DisposableEffect
 import dev.opencircuit.codetalker.SttMode
 import dev.opencircuit.codetalker.input.CompanionButtonHandler
 import dev.opencircuit.codetalker.net.DaemonClient
+import kotlinx.coroutines.flow.StateFlow
 import dev.opencircuit.codetalker.net.SessionLite
 import dev.opencircuit.codetalker.prefs.AppPreferences
 import dev.opencircuit.codetalker.ui.character.CharacterChip
@@ -122,7 +123,13 @@ fun SessionListScreen(
      *  Null defaults keep older callers + previews working. */
     onHoldStart: ((sessionId: String, mode: SttMode) -> Unit)? = null,
     onHoldEnd: (() -> Unit)? = null,
+    /** 2026-05-17 — live STT caption flow. Streams partial transcript
+     *  while a hold-to-talk is active, then final transcript or error
+     *  on release. The pressed button shows this in real time so the
+     *  user has feedback that recording is working. */
+    captionFlow: StateFlow<String>? = null,
 ) {
+    val liveCaption by (captionFlow?.collectAsState(initial = "") ?: remember { mutableStateOf("") })
     var sessions by remember { mutableStateOf<List<SessionLite>>(emptyList()) }
     // 2026-05-11 Tier-B — auto-subscribe state. Tracks SIDs we've already
     // considered for auto-subscription this screen visit so we don't
@@ -605,6 +612,7 @@ fun SessionListScreen(
                                 { mode -> fn(session.sessionId, mode) }
                             },
                             onHoldEnd = onHoldEnd,
+                            liveCaption = liveCaption,
                         )
                     }
                 }
@@ -695,6 +703,10 @@ private fun SessionRow(
      *  bottom for Buddy STT and Direct-STT. Null hides the row. */
     onHoldStart: ((SttMode) -> Unit)? = null,
     onHoldEnd: (() -> Unit)? = null,
+    /** 2026-05-17 — live STT caption surface. While a hold-to-talk button
+     *  on THIS row is pressed, the partial transcript streams here. After
+     *  release, holds the final transcript / error message briefly. */
+    liveCaption: String = "",
 ) {
     val nowSec = System.currentTimeMillis() / 1000.0
     val isRecentlyActive = session.isLive && (nowSec - session.lastHookAt < 10.0)
@@ -828,6 +840,7 @@ private fun SessionRow(
                         accentColor = Color(0xFF60A5FA),
                         onPress = { onHoldStart(SttMode.BUDDY) },
                         onRelease = onHoldEnd,
+                        liveCaption = liveCaption,
                     )
                     HoldToTalkButton(
                         modifier = Modifier.weight(1f),
@@ -836,6 +849,23 @@ private fun SessionRow(
                         accentColor = Color(0xFFFB923C),
                         onPress = { onHoldStart(SttMode.DIRECT_CC) },
                         onRelease = onHoldEnd,
+                        liveCaption = liveCaption,
+                    )
+                }
+                // 2026-05-17 — post-release status line. captionText
+                // holds either "[no speech captured]", "[buddy error: ...]",
+                // "[direct_cc error: ...]", or the final transcript. Show
+                // it for non-empty values so failures are visible instead
+                // of silent dead-air (the previous behavior caused "first
+                // time worked then nothing" reports — no UI hint why).
+                if (liveCaption.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    val isError = liveCaption.startsWith("[")
+                    Text(
+                        liveCaption,
+                        fontSize = 11.sp,
+                        color = if (isError) Color(0xFFFB7185) else Color(0xFF94A3B8),
+                        fontWeight = if (isError) FontWeight.SemiBold else FontWeight.Normal,
                     )
                 }
             }
@@ -857,6 +887,11 @@ private fun HoldToTalkButton(
     accentColor: Color,
     onPress: () -> Unit,
     onRelease: () -> Unit,
+    /** 2026-05-17 — live partial transcript while pressed. Shown in
+     *  place of [pressedLabel] when non-empty so the user has feedback
+     *  that the recorder is hearing them. After release, the caller's
+     *  status text takes over (rendered below the button row). */
+    liveCaption: String = "",
 ) {
     var pressed by remember { mutableStateOf(false) }
     val bg = if (pressed) accentColor.copy(alpha = 0.35f) else accentColor.copy(alpha = 0.15f)
@@ -885,11 +920,21 @@ private fun HoldToTalkButton(
             contentAlignment = Alignment.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 12.dp),
         ) {
+            // While pressed and we have a live partial transcript that's
+            // NOT an error/status marker (those start with "["), show it
+            // so the user can SEE the recognizer is picking them up.
+            // Otherwise fall back to the static label.
+            val displayText = when {
+                pressed && liveCaption.isNotBlank() && !liveCaption.startsWith("[") -> liveCaption
+                pressed -> pressedLabel
+                else -> label
+            }
             Text(
-                if (pressed) pressedLabel else label,
+                displayText,
                 color = accentColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
             )
         }
     }

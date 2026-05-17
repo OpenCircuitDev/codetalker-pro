@@ -698,6 +698,12 @@ private fun CompanionRoot(
                 // long-press path (now released for system volume).
                 onHoldStart = { sid, mode -> viewModel.startHoldToTalk(sid, mode) },
                 onHoldEnd = { viewModel.endHoldToTalk() },
+                // 2026-05-17 — stream the STT caption so the card can
+                // show partial transcript while held, and a status line
+                // after release. Eliminates silent failure mode that
+                // made "Buddy did not check back in" indistinguishable
+                // from "Buddy LLM is slow."
+                captionFlow = viewModel.captionText,
             )
         }
         }

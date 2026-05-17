@@ -101,18 +101,36 @@ class CompanionViewModel(
 
     private fun dispatch() {
         val sid = activeSessionId.value ?: return
+        val mode = sttMode.value
+        // 2026-05-17 fix — the previous version read `lastFinalText`
+        // and `captionText` synchronously immediately after launching
+        // an async stop(). SpeechRecognizer's onResults() fires
+        // 100-500ms AFTER stopListening(), so `lastFinalText` was
+        // almost always null and we ended up sending whatever partial
+        // happened to be in captionText (often empty → silent
+        // early-return). "Dictate first time worked, then intermittent"
+        // was exactly this race: when the user spoke slowly enough that
+        // a partial landed before release, it worked; otherwise nothing
+        // happened.
+        //
+        // Now we coroutine-await the final transcript with an 800ms
+        // deadline. SpeechRecognizer.stopListening() typically delivers
+        // onResults inside ~300ms; 800ms gives slack for slow devices.
         scope.launch {
             withContext(sttDispatcher) { sttRecorder.stop() }
-        }
-        val text = lastFinalText.value
-            ?: captionText.value.takeIf { it.isNotBlank() }
-            ?: return
-        // 2026-05-12 — route by sttMode set at hold-start. BUDDY hits
-        // /api/companion/inject through the Buddy intermediate LLM;
-        // DIRECT_CC hits /api/companion/direct-stt which types straight
-        // into the OS-foreground CC window via SendKeys.
-        val mode = sttMode.value
-        scope.launch {
+            val deadline = System.currentTimeMillis() + 800L
+            while (lastFinalText.value == null
+                && System.currentTimeMillis() < deadline) {
+                kotlinx.coroutines.delay(40)
+            }
+            val text = lastFinalText.value
+                ?: captionText.value.takeIf { it.isNotBlank() }
+            if (text.isNullOrBlank()) {
+                // Surface the failure on the caption flow so the UI can
+                // show "no speech captured" instead of silent dead-air.
+                captionText.value = "[no speech captured]"
+                return@launch
+            }
             try {
                 when (mode) {
                     SttMode.BUDDY -> {

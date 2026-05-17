@@ -60,6 +60,14 @@ class AndroidSTTRecorder(
     }
 
     override fun start() {
+        // 2026-05-17 — cancel() before startListening() flushes any
+        // lingering state from a prior recognition session. Without it
+        // back-to-back hold-to-talk presses hit ERROR_RECOGNIZER_BUSY
+        // silently (the listener fires but no onResults), which is why
+        // "Buddy/Dictate worked once then stopped working" was the
+        // most-reported failure mode. cancel() is a no-op on a fresh
+        // recognizer so it's safe to call unconditionally.
+        recognizer?.cancel()
         recognizer?.startListening(intent)
             ?: run { _events.tryEmit(STTEvent.Error(-1, "SpeechRecognizer unavailable")) }
     }
