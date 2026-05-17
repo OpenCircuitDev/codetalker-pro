@@ -252,12 +252,15 @@ fun SessionListScreen(
     //   active (default) -- recently active (any mode/mute state)
     //   live             -- recently active AND active_mode == "live"
     //   brief            -- recently active AND active_mode == "brief"
+    //   teacher          -- recently active AND active_mode == "teacher" (2026-05-17)
     //   muted            -- recently active AND enabled == false
     //
-    // Previously "live" was based on s.isLive (recency), which conflicts
-    // with the user's vocabulary where "Live" = the verbose speaking
-    // mode the user set via the ModePicker. Renaming would have been
-    // user-hostile; the filter now matches the speaking-mode name.
+    // 2026-05-17 — added "teacher" filter. ModePicker has long offered
+    // Teacher as a peer of Live/Brief/Trigger, but the Sessions list had
+    // no pill for it. Result: setting a session to Teacher mode dropped
+    // it out of every visible filter (Live and Brief both exclude it,
+    // Active sweeps too broad). User reported "no sessions in list"
+    // after switching to Teacher — this closes that trap.
     val filtered = remember(sessions, filter, activeSessionIds, now) {
         sessions.filter { s ->
             if (!isActiveNow(s)) return@filter false
@@ -265,6 +268,7 @@ fun SessionListScreen(
                 "active" -> true
                 "live" -> (s.activeMode ?: "").equals("live", ignoreCase = true)
                 "brief" -> (s.activeMode ?: "").equals("brief", ignoreCase = true)
+                "teacher" -> (s.activeMode ?: "").equals("teacher", ignoreCase = true)
                 "muted" -> !s.enabled
                 else -> true
             }
@@ -337,6 +341,7 @@ fun SessionListScreen(
             "active" to active.size,
             "live" to active.count { (it.activeMode ?: "").equals("live", ignoreCase = true) },
             "brief" to active.count { (it.activeMode ?: "").equals("brief", ignoreCase = true) },
+            "teacher" to active.count { (it.activeMode ?: "").equals("teacher", ignoreCase = true) },
             "muted" to active.count { !it.enabled },
         )
     }
@@ -511,27 +516,56 @@ fun SessionListScreen(
             return@Column
         }
         if (filtered.isEmpty()) {
-            // 2026-05-16 — when the chosen filter hides everything but
-            // live sessions exist, offer a one-tap escape to the Live
-            // view instead of leaving the user staring at an empty
-            // screen. The "Tap All" copy from earlier referenced a
-            // filter pill that doesn't exist (no "All" pill — Live is
-            // the broad view).
-            val anyLive = sessions.any { it.isLive }
+            // 2026-05-17 — when the current pill hides everything,
+            // surface counts in OTHER pills so the user knows where
+            // their sessions went. Common trap: change a session's
+            // mode to Teacher → it drops out of Live AND Brief filters
+            // → user stares at an empty screen with no hint that their
+            // sessions exist under the "Teacher" pill. Each non-empty
+            // peer filter is offered as a one-tap escape.
+            val activeCount = counts["active"] ?: 0
+            val peers = listOf("active", "live", "brief", "teacher", "muted")
+                .filter { it != filter }
+                .mapNotNull { key ->
+                    val n = counts[key] ?: 0
+                    if (n > 0) key to n else null
+                }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     "No sessions match the “${filter}” filter.",
                     fontSize = 13.sp,
                     color = Color(0xFF8B91A0),
                 )
-                if (anyLive && filter != "live") {
+                if (peers.isNotEmpty()) {
                     Text(
-                        "Tap to show all live sessions (${sessions.count { it.isLive }})",
-                        fontSize = 13.sp,
-                        color = Color(0xFF6EA8FE),
-                        modifier = Modifier.clickable {
-                            scope.launch { appPreferences.setSessionFilter("live") }
-                        },
+                        "Sessions in other filters:",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6B7280),
+                    )
+                    peers.forEach { (key, n) ->
+                        val label = when (key) {
+                            "active" -> "Active"
+                            "live" -> "Live"
+                            "brief" -> "Brief"
+                            "teacher" -> "Teacher"
+                            "muted" -> "Muted"
+                            else -> key
+                        }
+                        Text(
+                            "Switch to $label ($n)",
+                            fontSize = 13.sp,
+                            color = Color(0xFF6EA8FE),
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable {
+                                scope.launch { appPreferences.setSessionFilter(key) }
+                            },
+                        )
+                    }
+                } else if (activeCount == 0) {
+                    Text(
+                        "No sessions have been active in the last hour. Open a Claude Code window or trigger a hook to wake one up.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6B7280),
                     )
                 }
             }
@@ -637,6 +671,7 @@ private fun FilterChipsRow(
         "active" to "Active",
         "live" to "Live",
         "brief" to "Brief",
+        "teacher" to "Teacher",
         "muted" to "Muted",
     )
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
