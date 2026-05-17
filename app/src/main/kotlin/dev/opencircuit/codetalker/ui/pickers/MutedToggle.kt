@@ -9,6 +9,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,7 +33,15 @@ fun MutedToggle(
     modifier: Modifier = Modifier,
     onChange: (Boolean) -> Unit,
 ) {
-    val isMuted = !enabled
+    // v0.1.0 unification — optimistic local state. The parent's `enabled`
+    // prop comes from a stale SessionState snapshot that's only refreshed
+    // by the daemon getSession round-trip (which 404s for dormant
+    // sessions). Without local optimistic update, the switch UI would
+    // freeze even though the daemon write succeeded. `remember(enabled)`
+    // re-seeds when the parent's enabled actually changes (a future poll
+    // refresh or another surface modifies it).
+    var localEnabled by remember(enabled) { mutableStateOf(enabled) }
+    val isMuted = !localEnabled
     Card(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -48,7 +60,14 @@ fun MutedToggle(
                     color = Color(0xFF8B91A0),
                 )
             }
-            Switch(checked = isMuted, onCheckedChange = { mute -> onChange(!mute) })
+            Switch(
+                checked = isMuted,
+                onCheckedChange = { mute ->
+                    val newEnabled = !mute
+                    localEnabled = newEnabled    // optimistic UI flip
+                    onChange(newEnabled)         // fire-and-forget daemon write
+                },
+            )
         }
     }
 }

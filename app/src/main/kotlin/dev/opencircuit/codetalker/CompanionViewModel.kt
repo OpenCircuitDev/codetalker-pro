@@ -25,10 +25,28 @@ import kotlinx.coroutines.withContext
  * free for v1.0 so tests don't need a Robolectric context. The activity
  * still owns a single instance and calls [release] on destroy.
  */
+/**
+ * 2026-05-12 — distinguishes the two STT routes available on SessionDetail.
+ *
+ * `BUDDY`: vol-DOWN hold. Transcript goes to /api/companion/inject, which
+ *           runs through the Buddy intermediate LLM. Reply auto-narrates.
+ * `DIRECT_CC`: vol-UP hold. Transcript goes to /api/companion/direct-stt,
+ *               which types the words into the OS-foreground window
+ *               (presumed: the user's active CC session) via SendKeys
+ *               + Enter. CC's reply auto-narrates via the existing hook
+ *               pipeline. No Buddy LLM in the loop.
+ */
+enum class SttMode { BUDDY, DIRECT_CC }
+
 class CompanionViewModel(
     private val sttRecorder: STTRecorder,
     private val inject: suspend (sessionId: String, text: String) -> Unit,
     private val startBuddy: suspend (sessionId: String) -> String,
+    /** 2026-05-12 — direct-STT delivery hook. Implementation POSTs to
+     *  daemon `/api/companion/direct-stt` with the active session_id and
+     *  the transcribed text. Daemon handles the SendKeys injection. */
+    private val directStt: suspend (sessionId: String, text: String) -> Unit =
+        { _, _ -> /* no-op default — tests can omit */ },
     private val scope: CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.IO),
     /** Dispatcher used for STT operations — Android's SpeechRecognizer
@@ -39,6 +57,11 @@ class CompanionViewModel(
     val buddyId = MutableStateFlow<String?>(null)
     val captionText = MutableStateFlow("")
     val lastFinalText = MutableStateFlow<String?>(null)
+
+    /** Which STT route is active for the *current* recording. Set by the
+     *  gesture handler (onLongPress vs onRockerUpLongPress) before
+     *  triggering [handleButtonState] with [ButtonState.Listening]. */
+    val sttMode = MutableStateFlow(SttMode.BUDDY)
 
     private var sttCollectorJob: Job? = null
 
@@ -84,10 +107,40 @@ class CompanionViewModel(
         val text = lastFinalText.value
             ?: captionText.value.takeIf { it.isNotBlank() }
             ?: return
+        // 2026-05-12 — route by sttMode set at hold-start. BUDDY hits
+        // /api/companion/inject through the Buddy intermediate LLM;
+        // DIRECT_CC hits /api/companion/direct-stt which types straight
+        // into the OS-foreground CC window via SendKeys.
+        val mode = sttMode.value
         scope.launch {
             try {
-                val bid = buddyId.value
-                    ?: startBuddy(sid).also { buddyId.value = it }
+                when (mode) {
+                    SttMode.BUDDY -> {
+                        val bid = buddyId.value
+                            ?: startBuddy(sid).also { buddyId.value = it }
+                        inject(bid, text)
+                    }
+                    SttMode.DIRECT_CC -> {
+                        directStt(sid, text)
+                    }
+                }
+            } catch (e: Throwable) {
+                captionText.value = "[${mode.name.lowercase()} error: ${e.message}]"
+            }
+        }
+    }
+
+    /**
+     * v0.1.0 polish — public hook for the SessionDetail Chat tab so typed
+     * messages can be sent to the buddy without going through the STT path.
+     * Same plumbing as dispatch() but takes explicit text.
+     */
+    fun injectText(text: String) {
+        val sid = activeSessionId.value ?: return
+        if (text.isBlank()) return
+        scope.launch {
+            try {
+                val bid = buddyId.value ?: startBuddy(sid).also { buddyId.value = it }
                 inject(bid, text)
             } catch (e: Throwable) {
                 captionText.value = "[inject error: ${e.message}]"

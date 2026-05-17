@@ -14,9 +14,9 @@ import org.junit.Test
 class PickerCatalogTest {
 
     @Test
-    fun `mode picker exposes the four daemon-recognised modes`() {
+    fun `mode picker exposes the daemon-recognised modes`() {
         val values = MODE_OPTIONS.map { it.first }
-        assertEquals(listOf("brief", "direct", "live", "trigger"), values)
+        assertEquals(listOf("brief", "direct", "live", "trigger", "teacher"), values)
     }
 
     @Test

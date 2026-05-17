@@ -102,7 +102,7 @@ private fun ManualEntryScreen(
     onPaired: (Pairing) -> Unit,
     onSwitchToQr: () -> Unit,
 ) {
-    var url by remember { mutableStateOf("http://") }
+    var url by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -122,6 +122,7 @@ private fun ManualEntryScreen(
             value = url,
             onValueChange = { url = it; error = null },
             label = { Text("Daemon URL") },
+            placeholder = { Text("http://192.168.1.86:17832") },
             singleLine = false,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -139,10 +140,16 @@ private fun ManualEntryScreen(
             Button(
                 onClick = {
                     try {
-                        val paired = if (url.trim().startsWith("{")) {
-                            pairingFlow.savePairing(url.trim())
+                        val trimmed = url.trim()
+                        val paired = if (trimmed.startsWith("{")) {
+                            pairingFlow.savePairing(trimmed)
                         } else {
-                            pairingFlow.saveManual(url.trim(), token.trim())
+                            val normalized = when {
+                                trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+                                trimmed.isNotEmpty() -> "http://$trimmed"
+                                else -> trimmed
+                            }
+                            pairingFlow.saveManual(normalized, token.trim())
                         }
                         onPaired(paired)
                     } catch (e: Throwable) {

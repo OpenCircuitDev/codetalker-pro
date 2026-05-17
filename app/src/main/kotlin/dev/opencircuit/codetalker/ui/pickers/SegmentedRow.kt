@@ -5,13 +5,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,6 +41,12 @@ fun SegmentedRow(
     ) {
         options.forEach { (value, label) ->
             val isSel = selected == value
+            // 2026-05-11 — Modifier.selectable replaces .clickable so the
+            // chip publishes Role.RadioButton + selected state to the
+            // accessibility tree. uiautomator dumps now expose the active
+            // chip via the `selected="true"` attribute (Compose's plain
+            // .clickable left every chip selected=false regardless of
+            // visual highlight, which masked audit verification).
             Text(
                 label,
                 color = if (isSel) Color.White else Color(0xFFBDC2D0),
@@ -48,7 +55,11 @@ fun SegmentedRow(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
                     .background(if (isSel) Color(0xFF2D3142) else Color.Transparent)
-                    .clickable { onSelect(value) }
+                    .selectable(
+                        selected = isSel,
+                        onClick = { onSelect(value) },
+                        role = Role.RadioButton,
+                    )
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }

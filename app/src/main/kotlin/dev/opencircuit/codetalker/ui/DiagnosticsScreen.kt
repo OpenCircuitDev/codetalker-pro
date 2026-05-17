@@ -62,6 +62,7 @@ fun DiagnosticsScreen(
     var lastSuccessMs by remember { mutableStateOf<Long?>(null) }
     var lastRttMs by remember { mutableStateOf<Long?>(null) }
     var healthError by remember { mutableStateOf<String?>(null) }
+    var narrationWarning by remember { mutableStateOf<String?>(null) }
     var batteryPct by remember { mutableStateOf<Int?>(null) }
     var glassesAttached by remember { mutableStateOf<Boolean?>(null) }
     val activeSessionId by appPreferences.activeSessionId.collectAsState(initial = null)
@@ -73,9 +74,10 @@ fun DiagnosticsScreen(
             val t0 = System.currentTimeMillis()
             val rtt = withContext(Dispatchers.IO) {
                 try {
-                    daemonClient.getHealthOrThrow()
+                    val health = daemonClient.getHealthOrThrow()
                     val dt = System.currentTimeMillis() - t0
                     healthError = null
+                    narrationWarning = health.narrationWarning
                     lastSuccessMs = System.currentTimeMillis()
                     dt
                 } catch (e: Throwable) {
@@ -107,6 +109,28 @@ fun DiagnosticsScreen(
             OutlinedButton(onClick = onBack) { Text("Back") }
         }
         Spacer(Modifier.height(12.dp))
+
+        // 2026-05-16 -- master-narration banner. The single line in
+        // ~/.claude/scripts/tts_config.yaml that gates every TTS hook
+        // can silently disable narration across the fleet. Surfacing
+        // it here means the next time audio stalls, the cause is
+        // visible in one screen instead of buried in YAML.
+        narrationWarning?.let { warning ->
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "Narration disabled",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = androidx.compose.ui.graphics.Color(0xFFFB923C),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(warning, fontSize = 11.sp, color = androidx.compose.ui.graphics.Color(0xFFB8BCC4))
+                }
+            }
+        }
 
         StatusCard(
             label = "Daemon health",

@@ -6,6 +6,8 @@
 agp = "8.5.2"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
+detekt = "1.23.7"
+compose-rules = "0.4.18"
 
 # AndroidX
 core-ktx = "1.13.1"
@@ -90,7 +92,14 @@ mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 # Maven artifact gives tests a real implementation of the same API.
 org-json = { group = "org.json", name = "json", version.ref = "org-json" }
 
+# Detekt + Compose lint ruleset (added 2026-05-11). Auto-detects the
+# missing-Modifier class (the bug class found in SessionListScreen) and
+# many other Compose smells: missing Modifier params, wrong parameter
+# order, return-value emitters, naming. https://mrmans0n.github.io/compose-rules/
+compose-rules-detekt = { group = "io.nlopez.compose.rules", name = "detekt", version.ref = "compose-rules" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

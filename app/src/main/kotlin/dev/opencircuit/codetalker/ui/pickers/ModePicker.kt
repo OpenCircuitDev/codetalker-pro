@@ -11,6 +11,11 @@ import androidx.compose.ui.Modifier
  *   - direct: tool-output as-spoken (default)
  *   - live: continuous narration with cadence control
  *   - trigger: only fires on tagged narration triggers
+ *   - teacher: narration re-framed for non-experts; pairs with the
+ *              per-session teacher_mode config (depth_level, substitution,
+ *              glossary, reframe). Picker surfaces it as a peer of the other
+ *              modes — backend TeacherMode strategy is the follow-up
+ *              (M-AUD-1.5).
  *
  * Selecting a mode PUTs `{"active_mode":"<mode>"}` to the daemon.
  */
@@ -33,4 +38,5 @@ internal val MODE_OPTIONS = listOf(
     "direct" to "Direct",
     "live" to "Live",
     "trigger" to "Trigger",
+    "teacher" to "Teacher",
 )

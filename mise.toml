@@ -1,0 +1,30 @@
+# mise.toml — tool version pinning for codetalker-companion (Android).
+#
+# Landed 2026-05-11. Background: a previous gradle build emitted
+# `BUILD SUCCESSFUL` with no actual Java install — `gradlew` silently
+# fell through to a no-op because JAVA_HOME was unset and `java` wasn't
+# on PATH. The APK that got installed was the stale pre-edit one,
+# masking a real source-vs-binary divergence until we caught it by
+# comparing the APK mtime to the .kt source mtime.
+#
+# `mise` (https://mise.jdx.dev/) auto-loads tools when shelling into
+# this directory. Drop into `companion-android/` and you'll get an
+# AdoptOpenJDK 21 on PATH + JAVA_HOME automatically — no per-shell
+# env mucking, no silent gradle no-ops.
+#
+# Install:  curl https://mise.run | sh   (one-time, system-wide)
+# Activate: `mise install` here, then add `eval "$(mise activate bash)"`
+#           to your shell profile.
+# Verify:   `mise current java` → "21.0.x"
+#
+# `asdf` users: copy these versions into `.tool-versions` instead.
+
+[tools]
+java = "temurin-21.0.5+11"  # Eclipse Temurin (drop-in for Android Studio's jbr 21)
+# Gradle version is pinned by gradle-wrapper.properties; mise just
+# ensures the JDK that the wrapper invokes is reproducible.
+
+[env]
+# Expose JAVA_HOME for raw `gradle` / IDE / scripts that don't query
+# mise. Belt + braces.
+_.path = ["{{ env.MISE_DATA_DIR }}/installs/java/temurin-21.0.5+11/bin"]

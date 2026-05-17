@@ -1,0 +1,83 @@
+# detekt config for codetalker-companion (Android Compose UI).
+#
+# Landed 2026-05-11 after audit found the missing-clickable / missing-
+# Modifier class of bug in SessionListScreen. The Compose ruleset from
+# mrmans0n/compose-rules catches that whole class — wired in via
+# `detektPlugins(libs.compose.rules.detekt)` in app/build.gradle.kts.
+#
+# Run: ./gradlew detekt
+# Reports: app/build/reports/detekt/{detekt.html, detekt.xml, detekt.txt}
+#
+# We start with `buildUponDefaultConfig: true` (set in build.gradle.kts)
+# so the standard detekt rules are also active. Below we override the
+# Compose-specific rules.
+
+build:
+  maxIssues: 0  # initially treat any new finding as a failure
+  excludeCorrectable: false
+
+# https://mrmans0n.github.io/compose-rules/rules/ — the Compose pack the
+# detekt plugin ships. We enable the high-signal rules and leave the
+# stylistic ones at default (they're already on via buildUponDefaultConfig).
+Compose:
+  active: true
+  # ModifierMissing: chip/row/box/scaffold composables that accept no
+  # Modifier param. Was the root signal behind the SessionListScreen
+  # missing-clickable bug — chips were emitted as plain Text() without
+  # any tappability or accessibility hook.
+  ModifierMissing:
+    active: true
+    contentEmitterOption:
+      contentEmitters:
+        - Box
+        - Column
+        - Row
+        - Card
+        - Scaffold
+        - FlowRow
+        - FlowColumn
+  # Composables that accept a Modifier should put it first and default to
+  # Modifier (catches "Modifier = Modifier" missing).
+  ModifierComposable:
+    active: true
+  ModifierNotUsedAtRoot:
+    active: true
+  ModifierReused:
+    active: true
+  # Force composable lambda params to be named `content`, etc.
+  ComposableLambdaParameterNaming:
+    active: true
+  ComposableLambdaParameterPosition:
+    active: true
+  # Composables that look stateful but mutate captured state outside their
+  # caller's scope.
+  RememberMissing:
+    active: true
+  # Multiple top-level emitters in one composable.
+  MultipleEmitters:
+    active: true
+  # Plain `.clickable` on chip-shaped Text without a corresponding
+  # `Modifier.selectable` / `semantics` is exactly the bug we hit.
+  # ViewModelForwarding helps when composables proxy ViewModels — not
+  # immediately relevant but catches future leaks.
+  ViewModelForwarding:
+    active: true
+
+# Override defaults that are too noisy for this codebase.
+style:
+  MagicNumber:
+    active: false  # Compose color hex literals + dp/sp values trigger constantly
+  MaxLineLength:
+    active: true
+    maxLineLength: 140  # default 120 is too tight for Compose modifier chains
+
+complexity:
+  LongParameterList:
+    active: true
+    functionThreshold: 9  # Compose composables routinely have 6-8 params + Modifier
+
+# Don't lint generated code or test resources.
+exclude:
+  - '**/build/**'
+  - '**/generated/**'
+  - '**/test/resources/**'

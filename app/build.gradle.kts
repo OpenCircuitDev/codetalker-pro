@@ -4,6 +4,18 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.detekt)
+}
+
+// 2026-05-11 — detekt + mrmans0n/compose-rules. Run via `./gradlew detekt`
+// to surface the missing-Modifier / missing-clickable class (caught
+// manually in SessionListScreen audit 2026-05-11). Report at
+// `app/build/reports/detekt/*`.
+detekt {
+    toolVersion = libs.versions.detekt.get()
+    config.setFrom(files("${rootDir}/detekt.yml"))
+    buildUponDefaultConfig = true
+    autoCorrect = false
 }
 
 android {
@@ -107,6 +119,9 @@ android {
 }
 
 dependencies {
+    // 2026-05-11 — Compose lint via mrmans0n/compose-rules, fed into detekt.
+    detektPlugins(libs.compose.rules.detekt)
+
     // AndroidX core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

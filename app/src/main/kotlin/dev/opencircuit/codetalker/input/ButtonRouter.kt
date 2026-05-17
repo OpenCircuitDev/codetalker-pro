@@ -55,6 +55,13 @@ class ButtonRouter {
         val current = _state.value
         val next = when (input) {
             is ButtonInput.LongPress -> ButtonState.Idle
+            is ButtonInput.HoldEnd -> current  // legacy router ignores hold-end
+            // 2026-05-12 — vol-up long-press emits LongPressUp/HoldEndUp.
+            // The legacy router (used by SessionList for in-glasses voice
+            // menu) treats these like LongPress/HoldEnd — direct-STT is
+            // handled per-screen via CompanionButtonHandler, not here.
+            is ButtonInput.LongPressUp -> ButtonState.Idle
+            is ButtonInput.HoldEndUp -> current
             is ButtonInput.Click -> handleClick(current, now)
             is ButtonInput.RockerUp -> handleRocker(current, delta = -1)
             is ButtonInput.RockerDown -> handleRocker(current, delta = +1)
@@ -118,7 +125,20 @@ sealed interface ButtonState {
 
 sealed interface ButtonInput {
     data object Click : ButtonInput
+    /** Volume-DOWN held past the long-press threshold. Bound to Buddy STT
+     *  (hold-to-talk through the intermediate LLM agent) on SessionDetail. */
     data object LongPress : ButtonInput
+    /** v0.1.0 polish — paired ACTION_UP after a LongPress fired. Lets
+     *  "hold to talk" handlers stop recording when the user releases. */
+    data object HoldEnd : ButtonInput
+    /** Volume-UP held past the long-press threshold. Bound to direct-STT
+     *  (transcript types into the active CC session via daemon SendKeys)
+     *  on SessionDetail. 2026-05-12 — distinct from LongPress so the two
+     *  STT routes (Buddy vs direct-CC) don't collide. */
+    data object LongPressUp : ButtonInput
+    /** Paired ACTION_UP after [LongPressUp] fired; release-half of the
+     *  direct-STT hold-to-talk gesture. */
+    data object HoldEndUp : ButtonInput
     data object RockerUp : ButtonInput
     data object RockerDown : ButtonInput
     data object Silence : ButtonInput
