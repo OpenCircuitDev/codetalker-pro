@@ -123,12 +123,27 @@ class CompanionViewModel(
                 && System.currentTimeMillis() < deadline) {
                 kotlinx.coroutines.delay(40)
             }
-            val text = lastFinalText.value
+            // 2026-05-18 — also reject captionText fallback if it's an
+            // STT error string. Without this check, when the recognizer
+            // emits ERROR_NO_MATCH (or similar), captionText gets set to
+            // "[stt error: no match]" and dispatch then SENDS THAT to the
+            // buddy LLM as if it were the user's question. The buddy
+            // replies about the error text, and TTS reads it back as
+            // "STT error no match" — which the user perceives as the
+            // system "breaking" mid-press. With the prefix guard, an
+            // STT error caption short-circuits cleanly instead of
+            // poisoning the inject/direct-stt round-trip.
+            val raw = lastFinalText.value
                 ?: captionText.value.takeIf { it.isNotBlank() }
+            val isErrorCaption = raw?.startsWith("[") == true
+            val text = if (isErrorCaption) null else raw
             if (text.isNullOrBlank()) {
                 // Surface the failure on the caption flow so the UI can
                 // show "no speech captured" instead of silent dead-air.
-                captionText.value = "[no speech captured]"
+                // Preserve the original STT error text if present so the
+                // user sees WHY the recognizer didn't capture anything.
+                captionText.value = raw?.takeIf { isErrorCaption }
+                    ?: "[no speech captured]"
                 return@launch
             }
             try {
