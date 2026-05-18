@@ -681,7 +681,14 @@ fun SessionListScreen(
                             activeRecordingMode = activeRecording
                                 ?.takeIf { it.first == session.sessionId }
                                 ?.second,
-                            liveCaption = liveCaption,
+                            // 2026-05-18 — only the row that owns the active
+                            // recording sees the live caption stream. Passing
+                            // it unconditionally to every row caused all cards
+                            // to grow when ANY session was recording, which
+                            // shifted the LazyColumn's content position and
+                            // felt like an unexpected scroll-upward to the
+                            // user. Now only the active row reflows.
+                            liveCaption = if (activeRecording?.first == session.sessionId) liveCaption else "",
                         )
                     }
                 }
@@ -986,7 +993,17 @@ private fun VoiceToggleButton(
     Surface(
         modifier = modifier
             .heightIn(min = 48.dp)
-            .clickable(onClick = onClick),
+            // 2026-05-18 — use a pointerInput tap detector instead of
+            // Modifier.clickable. clickable bubbles up: the parent Card's
+            // own clickable was firing too, navigating into SessionDetail
+            // on the same press. detectTapGestures consumes the pointer
+            // events so the Card's click handler never sees them. Also
+            // avoids the focus-request side effect that LazyColumn was
+            // honoring as "scroll the focused item into view", which
+            // contributed to the perceived screen-jump.
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onClick() })
+            },
         color = bg,
         shape = RoundedCornerShape(8.dp),
         border = androidx.compose.foundation.BorderStroke(
