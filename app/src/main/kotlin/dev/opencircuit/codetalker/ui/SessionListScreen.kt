@@ -114,22 +114,37 @@ fun SessionListScreen(
      *  to respect user-driven de-activations. */
     onAutoSubscribeMissing: (Set<String>) -> Unit = {},
     setScreenButtonHandler: (CompanionButtonHandler?) -> Unit = {},
-    /** 2026-05-17 — per-card hold-to-talk. Press-down fires
-     *  [onHoldStart] with the card's session_id and the desired
-     *  [SttMode]; release fires [onHoldEnd]. Replaces the volume-rocker
-     *  long-press path that used to drive Buddy + Direct STT (the rocker
-     *  is now released for system volume control).
+    /** 2026-05-17 — per-card voice input. First call starts the recorder
+     *  pinned to the given session_id + mode; second call (via [onHoldEnd])
+     *  stops + dispatches the transcript.
+     *
+     *  2026-05-18 — UX semantics changed: click-toggle, not press-and-hold.
+     *  The button names stayed the same (onHoldStart/onHoldEnd) for
+     *  back-compat with the wiring in MainActivity. Behavior: tap the
+     *  button to start recording; tap again to stop + send. Only one
+     *  button can be recording at a time; tapping a different button
+     *  while one is recording stops the current and starts the new one.
      *
      *  Null defaults keep older callers + previews working. */
     onHoldStart: ((sessionId: String, mode: SttMode) -> Unit)? = null,
     onHoldEnd: (() -> Unit)? = null,
-    /** 2026-05-17 — live STT caption flow. Streams partial transcript
-     *  while a hold-to-talk is active, then final transcript or error
-     *  on release. The pressed button shows this in real time so the
-     *  user has feedback that recording is working. */
+    /** 2026-05-17 — live STT caption flow. Partial transcript streams
+     *  while a recording is active; the active button shows it in real
+     *  time so the user has feedback that the recognizer is hearing them.
+     *  After release/stop, holds the final transcript or error briefly. */
     captionFlow: StateFlow<String>? = null,
 ) {
     val liveCaption by (captionFlow?.collectAsState(initial = "") ?: remember { mutableStateOf("") })
+    // 2026-05-18 — click-toggle recording state. Tracks WHICH (sessionId,
+    // mode) pair is currently recording so:
+    //   (a) the right card button shows the "recording" visual,
+    //   (b) clicking a different button cleanly stops the current
+    //       recording before starting the new one (only one recording
+    //       can run at a time on the recognizer anyway),
+    //   (c) clicking the SAME button stops + dispatches the transcript.
+    // Held at screen level (not inside each button) so only one button
+    // can show "recording" at any moment.
+    var activeRecording by remember { mutableStateOf<Pair<String, SttMode>?>(null) }
     var sessions by remember { mutableStateOf<List<SessionLite>>(emptyList()) }
     // 2026-05-11 Tier-B — auto-subscribe state. Tracks SIDs we've already
     // considered for auto-subscription this screen visit so we don't
@@ -637,15 +652,35 @@ fun SessionListScreen(
                                     }
                                 }
                             },
-                            // 2026-05-17 — per-card hold-to-talk handlers.
-                            // Captures the row's session_id at bind-time so
-                            // the recording always dispatches to the right
-                            // session, even if the user scrolls or another
-                            // row becomes active mid-press.
-                            onHoldStart = onHoldStart?.let { fn ->
-                                { mode -> fn(session.sessionId, mode) }
-                            },
-                            onHoldEnd = onHoldEnd,
+                            // 2026-05-18 — click-toggle voice input. Each
+                            // button click either starts recording (if
+                            // nothing is recording, or a different button
+                            // is) or stops + dispatches (if THIS button is
+                            // the active one). Captures session_id at
+                            // bind-time so the dispatch always targets the
+                            // right session even after scroll.
+                            onVoiceToggle = if (onHoldStart != null && onHoldEnd != null) {
+                                { mode ->
+                                    val thisKey = session.sessionId to mode
+                                    val current = activeRecording
+                                    if (current == thisKey) {
+                                        // Tapped the active button — stop + dispatch
+                                        onHoldEnd()
+                                        activeRecording = null
+                                    } else {
+                                        // Stop any other active recording first,
+                                        // then start this one.
+                                        if (current != null) {
+                                            onHoldEnd()
+                                        }
+                                        onHoldStart(session.sessionId, mode)
+                                        activeRecording = thisKey
+                                    }
+                                }
+                            } else null,
+                            activeRecordingMode = activeRecording
+                                ?.takeIf { it.first == session.sessionId }
+                                ?.second,
                             liveCaption = liveCaption,
                         )
                     }
@@ -736,14 +771,21 @@ private fun SessionRow(
      *  Previously the indicator was a static label; now it's interactive
      *  so users don't have to dive into SessionDetail to turn it off. */
     onToggleAuto: () -> Unit = {},
-    /** 2026-05-17 — per-card hold-to-talk. When both [onHoldStart] and
-     *  [onHoldEnd] are non-null, the row renders a two-button row at the
-     *  bottom for Buddy STT and Direct-STT. Null hides the row. */
-    onHoldStart: ((SttMode) -> Unit)? = null,
-    onHoldEnd: (() -> Unit)? = null,
-    /** 2026-05-17 — live STT caption surface. While a hold-to-talk button
-     *  on THIS row is pressed, the partial transcript streams here. After
-     *  release, holds the final transcript / error message briefly. */
+    /** 2026-05-18 — click-toggle voice input. When non-null, the row
+     *  renders Buddy + Dictate buttons at the bottom. The callback fires
+     *  ONCE per click with the chosen [SttMode]; the screen-level state
+     *  decides whether that click starts or stops a recording (passed
+     *  in via [activeRecordingMode]). Null hides the row. */
+    onVoiceToggle: ((SttMode) -> Unit)? = null,
+    /** 2026-05-18 — when non-null, indicates THIS row currently has a
+     *  recording active in the given mode. Used to show the recording
+     *  visual on the right button. Null means no recording is active
+     *  on this row (the recording may be on another row, or none). */
+    activeRecordingMode: SttMode? = null,
+    /** 2026-05-18 — live STT caption surface. While a voice recording
+     *  is active anywhere on the screen, the partial transcript streams
+     *  here. After stop, holds the final transcript / error message
+     *  briefly. */
     liveCaption: String = "",
 ) {
     val nowSec = System.currentTimeMillis() / 1000.0
@@ -859,35 +901,36 @@ private fun SessionRow(
                 CharacterChip(character = c)
             }
 
-            // 2026-05-17 — fat hold-to-talk row. Two thumb-sized buttons,
-            // one per STT route. Press-down starts the recorder for THIS
-            // session_id; release dispatches via the buddy LLM (Buddy) or
-            // SendKeys into the active CC window (Dictate). Replaces the
-            // volume-rocker long-press bindings — the rocker is now back
-            // to system volume control.
-            if (onHoldStart != null && onHoldEnd != null) {
+            // 2026-05-18 — click-toggle voice input row (was press-and-hold
+            // before this commit). Each button click toggles recording on
+            // its STT route: first tap starts the recorder pinned to this
+            // session; second tap (or tap of any other button) stops and
+            // dispatches the transcript via buddy LLM (Buddy) or daemon
+            // SendKeys (Dictate). Single-recording-at-a-time enforced at
+            // the screen level via activeRecordingMode.
+            if (onVoiceToggle != null) {
                 Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    HoldToTalkButton(
+                    VoiceToggleButton(
                         modifier = Modifier.weight(1f),
                         label = "🎙 Buddy",
-                        pressedLabel = "Listening…",
+                        recordingLabel = "● Listening…",
                         accentColor = Color(0xFF60A5FA),
-                        onPress = { onHoldStart(SttMode.BUDDY) },
-                        onRelease = onHoldEnd,
-                        liveCaption = liveCaption,
+                        isRecording = activeRecordingMode == SttMode.BUDDY,
+                        onClick = { onVoiceToggle(SttMode.BUDDY) },
+                        liveCaption = if (activeRecordingMode == SttMode.BUDDY) liveCaption else "",
                     )
-                    HoldToTalkButton(
+                    VoiceToggleButton(
                         modifier = Modifier.weight(1f),
                         label = "⌨ Dictate",
-                        pressedLabel = "Listening…",
+                        recordingLabel = "● Listening…",
                         accentColor = Color(0xFFFB923C),
-                        onPress = { onHoldStart(SttMode.DIRECT_CC) },
-                        onRelease = onHoldEnd,
-                        liveCaption = liveCaption,
+                        isRecording = activeRecordingMode == SttMode.DIRECT_CC,
+                        onClick = { onVoiceToggle(SttMode.DIRECT_CC) },
+                        liveCaption = if (activeRecordingMode == SttMode.DIRECT_CC) liveCaption else "",
                     )
                 }
                 // 2026-05-17 — post-release status line. captionText
@@ -912,59 +955,56 @@ private fun SessionRow(
 }
 
 /**
- * 2026-05-17 — hold-to-talk button. Press-down fires [onPress], release
- * fires [onRelease]. Background lifts on press so the user has visual
- * feedback that the recorder is live. ~48dp tall to comfortably hold a
- * thumb during dictation.
+ * 2026-05-18 — click-toggle voice button. First click starts a recording
+ * pinned to this button's STT route; second click (or click of any other
+ * voice button) stops the recording and dispatches the transcript. The
+ * [isRecording] flag controls the visual state — when true, the button
+ * shows a darker fill, the recording-state label, and (if non-blank) the
+ * live partial transcript. ~48dp tall, thumb-friendly.
+ *
+ * Replaces the press-and-hold gesture used earlier — user explicitly
+ * preferred a tap-to-toggle interaction (less ambiguous when the
+ * recognizer auto-stops on silence, more reliable on devices where the
+ * Compose pointer-event stream can drop a release).
  */
 @Composable
-private fun HoldToTalkButton(
+private fun VoiceToggleButton(
     modifier: Modifier = Modifier,
     label: String,
-    pressedLabel: String,
+    recordingLabel: String,
     accentColor: Color,
-    onPress: () -> Unit,
-    onRelease: () -> Unit,
-    /** 2026-05-17 — live partial transcript while pressed. Shown in
-     *  place of [pressedLabel] when non-empty so the user has feedback
-     *  that the recorder is hearing them. After release, the caller's
-     *  status text takes over (rendered below the button row). */
+    isRecording: Boolean,
+    onClick: () -> Unit,
+    /** 2026-05-18 — live partial transcript while THIS button's
+     *  recording is active. Caller passes empty string when the
+     *  recording is for a different button so we always show the
+     *  static label here. */
     liveCaption: String = "",
 ) {
-    var pressed by remember { mutableStateOf(false) }
-    val bg = if (pressed) accentColor.copy(alpha = 0.35f) else accentColor.copy(alpha = 0.15f)
+    val bg = if (isRecording) accentColor.copy(alpha = 0.45f) else accentColor.copy(alpha = 0.15f)
+    val borderAlpha = if (isRecording) 1.0f else 0.6f
     Surface(
         modifier = modifier
             .heightIn(min = 48.dp)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        pressed = true
-                        onPress()
-                        // tryAwaitRelease suspends until ACTION_UP or
-                        // cancellation; either way we run the dispatch
-                        // path so the recorder isn't left hot.
-                        tryAwaitRelease()
-                        pressed = false
-                        onRelease()
-                    },
-                )
-            },
+            .clickable(onClick = onClick),
         color = bg,
         shape = RoundedCornerShape(8.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.6f)),
+        border = androidx.compose.foundation.BorderStroke(
+            if (isRecording) 2.dp else 1.dp,
+            accentColor.copy(alpha = borderAlpha),
+        ),
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 12.dp),
         ) {
-            // While pressed and we have a live partial transcript that's
-            // NOT an error/status marker (those start with "["), show it
-            // so the user can SEE the recognizer is picking them up.
-            // Otherwise fall back to the static label.
+            // While recording and we have a real (non-error) partial
+            // transcript, show it so the user can SEE the recognizer is
+            // picking them up. Otherwise fall back to the recording or
+            // idle label.
             val displayText = when {
-                pressed && liveCaption.isNotBlank() && !liveCaption.startsWith("[") -> liveCaption
-                pressed -> pressedLabel
+                isRecording && liveCaption.isNotBlank() && !liveCaption.startsWith("[") -> liveCaption
+                isRecording -> recordingLabel
                 else -> label
             }
             Text(
