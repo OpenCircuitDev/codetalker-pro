@@ -704,6 +704,17 @@ private fun CompanionRoot(
                 // made "Buddy did not check back in" indistinguishable
                 // from "Buddy LLM is slow."
                 captionFlow = viewModel.captionText,
+                // 2026-05-21 — dictation REVIEW step. After endHoldToTalk
+                // the VM transitions into REVIEW with the captured text
+                // visible; the row renders Send / Re-record / Cancel
+                // buttons. Send dispatches; Re-record clears and restarts;
+                // Cancel returns to idle without sending. 30s hard cap on
+                // recording is enforced inside the VM (maxRecordingMs).
+                sttPhaseFlow = viewModel.sttPhase,
+                recordingElapsedFlow = viewModel.recordingElapsedMs,
+                onConfirmSend = { viewModel.confirmSend() },
+                onDiscardAndReRecord = { viewModel.discardAndReRecord() },
+                onCancelDictation = { viewModel.cancelDictation() },
             )
         }
         }

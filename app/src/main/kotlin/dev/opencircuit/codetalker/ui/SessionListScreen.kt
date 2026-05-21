@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.DisposableEffect
 import dev.opencircuit.codetalker.SttMode
+import dev.opencircuit.codetalker.SttUiPhase
 import dev.opencircuit.codetalker.input.CompanionButtonHandler
 import dev.opencircuit.codetalker.net.DaemonClient
 import kotlinx.coroutines.flow.StateFlow
@@ -133,8 +134,27 @@ fun SessionListScreen(
      *  time so the user has feedback that the recognizer is hearing them.
      *  After release/stop, holds the final transcript or error briefly. */
     captionFlow: StateFlow<String>? = null,
+    /** 2026-05-21 — dictation phase. When REVIEW, the row owning the
+     *  active recording renders the Send / Re-record / Cancel button row
+     *  instead of the regular VoiceToggleButton. Null = legacy behavior
+     *  (dispatch immediately on stop, no review). */
+    sttPhaseFlow: StateFlow<SttUiPhase>? = null,
+    /** 2026-05-21 — elapsed milliseconds inside the current RECORDING
+     *  phase. Used to render a countdown like "12s / 30s". Null = no
+     *  countdown rendered. */
+    recordingElapsedFlow: StateFlow<Long>? = null,
+    /** 2026-05-21 — user pressed Send in the review row. */
+    onConfirmSend: (() -> Unit)? = null,
+    /** 2026-05-21 — user pressed Re-record in the review row. */
+    onDiscardAndReRecord: (() -> Unit)? = null,
+    /** 2026-05-21 — user pressed Cancel in the review row. */
+    onCancelDictation: (() -> Unit)? = null,
 ) {
     val liveCaption by (captionFlow?.collectAsState(initial = "") ?: remember { mutableStateOf("") })
+    val sttPhase by (sttPhaseFlow?.collectAsState(initial = SttUiPhase.IDLE)
+        ?: remember { mutableStateOf(SttUiPhase.IDLE) })
+    val recordingElapsedMs by (recordingElapsedFlow?.collectAsState(initial = 0L)
+        ?: remember { mutableStateOf(0L) })
     // 2026-05-18 — click-toggle recording state. Tracks WHICH (sessionId,
     // mode) pair is currently recording so:
     //   (a) the right card button shows the "recording" visual,
@@ -157,6 +177,18 @@ fun SessionListScreen(
 
     val filter by appPreferences.sessionFilter.collectAsState(initial = "live")
     val collapsedGroups by appPreferences.sessionCollapsedGroups.collectAsState(initial = emptySet())
+
+    // 2026-05-21 — clear the screen-level activeRecording tracker when the
+    // VM returns to IDLE (after Send succeeds, after Cancel, or after a
+    // recording errored out). Without this, the row stays visually
+    // "owned" by the previous recording even though the VM has cleared
+    // its state — and the user can't start a new recording on a different
+    // session because the toggle logic still treats activeRecording as set.
+    LaunchedEffect(sttPhase) {
+        if (sttPhase == SttUiPhase.IDLE) {
+            activeRecording = null
+        }
+    }
 
     // Reload on demand (after a mutating action) and on first composition.
     LaunchedEffect(reloadKey) {
@@ -689,6 +721,20 @@ fun SessionListScreen(
                             // felt like an unexpected scroll-upward to the
                             // user. Now only the active row reflows.
                             liveCaption = if (activeRecording?.first == session.sessionId) liveCaption else "",
+                            // 2026-05-21 — REVIEW state plumbing. Only the
+                            // row that owns the recording sees the phase +
+                            // elapsed values; other rows get IDLE/0 so they
+                            // render their normal buttons.
+                            sttPhase = if (activeRecording?.first == session.sessionId)
+                                sttPhase else SttUiPhase.IDLE,
+                            recordingElapsedMs = if (activeRecording?.first == session.sessionId)
+                                recordingElapsedMs else 0L,
+                            onConfirmSend = onConfirmSend,
+                            onDiscardAndReRecord = onDiscardAndReRecord,
+                            onCancelDictation = {
+                                onCancelDictation?.invoke()
+                                activeRecording = null
+                            },
                         )
                     }
                 }
@@ -794,6 +840,21 @@ private fun SessionRow(
      *  here. After stop, holds the final transcript / error message
      *  briefly. */
     liveCaption: String = "",
+    /** 2026-05-21 — dictation phase. When this row owns the active
+     *  recording and phase==REVIEW, the voice-toggle area renders the
+     *  Send / Re-record / Cancel button row instead of the regular
+     *  buttons. IDLE / RECORDING / DISPATCHING render the existing UI. */
+    sttPhase: SttUiPhase = SttUiPhase.IDLE,
+    /** 2026-05-21 — elapsed milliseconds inside the current RECORDING
+     *  phase. The active row renders this as "8s / 30s" so the user
+     *  knows how much time is left before the auto-stop fires. */
+    recordingElapsedMs: Long = 0L,
+    /** 2026-05-21 — Send button handler in REVIEW. */
+    onConfirmSend: (() -> Unit)? = null,
+    /** 2026-05-21 — Re-record button handler in REVIEW. */
+    onDiscardAndReRecord: (() -> Unit)? = null,
+    /** 2026-05-21 — Cancel button handler in REVIEW. */
+    onCancelDictation: (() -> Unit)? = null,
 ) {
     val nowSec = System.currentTimeMillis() / 1000.0
     val isRecentlyActive = session.isLive && (nowSec - session.lastHookAt < 10.0)
@@ -908,53 +969,111 @@ private fun SessionRow(
                 CharacterChip(character = c)
             }
 
-            // 2026-05-18 — click-toggle voice input row (was press-and-hold
-            // before this commit). Each button click toggles recording on
-            // its STT route: first tap starts the recorder pinned to this
-            // session; second tap (or tap of any other button) stops and
-            // dispatches the transcript via buddy LLM (Buddy) or daemon
-            // SendKeys (Dictate). Single-recording-at-a-time enforced at
-            // the screen level via activeRecordingMode.
+            // 2026-05-18 — click-toggle voice input row.
+            // 2026-05-21 — extended with REVIEW state. When this row owns
+            // the active recording AND phase is REVIEW, we render a
+            // captioned text + Send / Re-record / Cancel row instead of
+            // the regular Buddy / Dictate buttons. This gives the user a
+            // chance to read what STT heard before it goes to the daemon
+            // (fixes the "tax prep rabbit hole" failure mode where the
+            // recognizer mishears a key word and Claude charges off in
+            // the wrong direction).
             if (onVoiceToggle != null) {
                 Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    VoiceToggleButton(
-                        modifier = Modifier.weight(1f),
-                        label = "🎙 Buddy",
-                        recordingLabel = "● Listening…",
-                        accentColor = Color(0xFF60A5FA),
-                        isRecording = activeRecordingMode == SttMode.BUDDY,
-                        onClick = { onVoiceToggle(SttMode.BUDDY) },
-                        liveCaption = if (activeRecordingMode == SttMode.BUDDY) liveCaption else "",
-                    )
-                    VoiceToggleButton(
-                        modifier = Modifier.weight(1f),
-                        label = "⌨ Dictate",
-                        recordingLabel = "● Listening…",
-                        accentColor = Color(0xFFFB923C),
-                        isRecording = activeRecordingMode == SttMode.DIRECT_CC,
-                        onClick = { onVoiceToggle(SttMode.DIRECT_CC) },
-                        liveCaption = if (activeRecordingMode == SttMode.DIRECT_CC) liveCaption else "",
-                    )
-                }
-                // 2026-05-17 — post-release status line. captionText
-                // holds either "[no speech captured]", "[buddy error: ...]",
-                // "[direct_cc error: ...]", or the final transcript. Show
-                // it for non-empty values so failures are visible instead
-                // of silent dead-air (the previous behavior caused "first
-                // time worked then nothing" reports — no UI hint why).
-                if (liveCaption.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    val isError = liveCaption.startsWith("[")
-                    Text(
-                        liveCaption,
-                        fontSize = 11.sp,
-                        color = if (isError) Color(0xFFFB7185) else Color(0xFF94A3B8),
-                        fontWeight = if (isError) FontWeight.SemiBold else FontWeight.Normal,
-                    )
+                val rowOwnsRecording = activeRecordingMode != null
+                val inReview = rowOwnsRecording && sttPhase == SttUiPhase.REVIEW
+                val inDispatch = rowOwnsRecording && sttPhase == SttUiPhase.DISPATCHING
+                if (inReview || inDispatch) {
+                    // Caption box — shows the final transcript awaiting Send.
+                    Surface(
+                        color = Color(0xFF1A2030),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, Color(0xFF374151),
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            liveCaption.ifBlank { "(empty transcript)" },
+                            color = Color(0xFFE2E8F0),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        // Send — primary, green.
+                        ReviewActionButton(
+                            modifier = Modifier.weight(1f),
+                            label = if (inDispatch) "Sending…" else "✓ Send",
+                            accentColor = Color(0xFF34D399),
+                            enabled = inReview && onConfirmSend != null,
+                            onClick = { onConfirmSend?.invoke() },
+                        )
+                        // Re-record — secondary, orange.
+                        ReviewActionButton(
+                            modifier = Modifier.weight(1f),
+                            label = "↻ Re-record",
+                            accentColor = Color(0xFFFB923C),
+                            enabled = inReview && onDiscardAndReRecord != null,
+                            onClick = { onDiscardAndReRecord?.invoke() },
+                        )
+                        // Cancel — tertiary, neutral.
+                        ReviewActionButton(
+                            modifier = Modifier.weight(1f),
+                            label = "✕ Cancel",
+                            accentColor = Color(0xFF94A3B8),
+                            enabled = inReview && onCancelDictation != null,
+                            onClick = { onCancelDictation?.invoke() },
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        // 2026-05-21 — countdown label while recording. Shows
+                        // "12s / 30s" so the user knows how much time is left
+                        // before the auto-finalize fires.
+                        val countdownText = if (rowOwnsRecording && sttPhase == SttUiPhase.RECORDING) {
+                            val sec = (recordingElapsedMs / 1000L).coerceAtLeast(0)
+                            "● ${sec}s / 30s"
+                        } else "● Listening…"
+                        VoiceToggleButton(
+                            modifier = Modifier.weight(1f),
+                            label = "🎙 Buddy",
+                            recordingLabel = countdownText,
+                            accentColor = Color(0xFF60A5FA),
+                            isRecording = activeRecordingMode == SttMode.BUDDY,
+                            onClick = { onVoiceToggle(SttMode.BUDDY) },
+                            liveCaption = if (activeRecordingMode == SttMode.BUDDY) liveCaption else "",
+                        )
+                        VoiceToggleButton(
+                            modifier = Modifier.weight(1f),
+                            label = "⌨ Dictate",
+                            recordingLabel = countdownText,
+                            accentColor = Color(0xFFFB923C),
+                            isRecording = activeRecordingMode == SttMode.DIRECT_CC,
+                            onClick = { onVoiceToggle(SttMode.DIRECT_CC) },
+                            liveCaption = if (activeRecordingMode == SttMode.DIRECT_CC) liveCaption else "",
+                        )
+                    }
+                    // Status line for errors or final caption (only when
+                    // not in review — review has its own caption box).
+                    if (liveCaption.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        val isError = liveCaption.startsWith("[")
+                        Text(
+                            liveCaption,
+                            fontSize = 11.sp,
+                            color = if (isError) Color(0xFFFB7185) else Color(0xFF94A3B8),
+                            fontWeight = if (isError) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    }
                 }
             }
         }
@@ -1034,6 +1153,51 @@ private fun VoiceToggleButton(
         }
     }
 }
+
+/**
+ * 2026-05-21 — pill-style action button used in the dictation REVIEW row.
+ * Similar visual language to [VoiceToggleButton] but rendered with a solid
+ * outlined treatment so Send / Re-record / Cancel read as decisive
+ * commit-style actions rather than the toggle metaphor of the voice
+ * buttons. Disabled state dims the surface so DISPATCHING (Send already
+ * tapped, request in flight) is visually distinct from REVIEW.
+ */
+@Composable
+private fun ReviewActionButton(
+    modifier: Modifier = Modifier,
+    label: String,
+    accentColor: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val alpha = if (enabled) 1.0f else 0.4f
+    Surface(
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .pointerInput(enabled) {
+                if (enabled) detectTapGestures(onTap = { onClick() })
+            },
+        color = accentColor.copy(alpha = 0.12f * alpha),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.5.dp, accentColor.copy(alpha = 0.8f * alpha),
+        ),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp, horizontal = 6.dp),
+        ) {
+            Text(
+                label,
+                color = accentColor.copy(alpha = alpha),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 
 @Composable
 private fun ActiveChip(active: Boolean, onSetActive: () -> Unit) {
