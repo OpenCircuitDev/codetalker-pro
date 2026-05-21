@@ -80,6 +80,30 @@ class DaemonClient(
         }
     }
 
+    /**
+     * 2026-05-21 — user-initiated narration skip.
+     *
+     * POSTs to /api/audio/skip. Stops whatever's currently playing AND
+     * drains the pending queue so the next narration is genuinely
+     * fresh, instead of continuing through a backlog of stale lines.
+     *
+     * @param sessionId  optional; when set, drops only that session's
+     *                   pending jobs. When null, global skip.
+     * @return Pair(interrupted, droppedCount). The Android UI uses
+     *         droppedCount to flash a brief "Skipped N" confirmation.
+     */
+    fun skipCurrentNarration(sessionId: String? = null): Pair<Boolean, Int> {
+        val body = JSONObject().also { o ->
+            if (sessionId != null) o.put("session_id", sessionId)
+        }.toString().toRequestBody(JSON)
+        val req = buildBase("/api/audio/skip").post(body).build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("skip HTTP ${resp.code}")
+            val o = JSONObject(resp.body?.string() ?: "{}")
+            return o.optBoolean("interrupted", false) to o.optInt("dropped", 0)
+        }
+    }
+
     fun getHealthOrThrow(): DaemonHealth {
         val req = buildBase("/api/health").build()
         httpClient.newCall(req).execute().use { resp ->

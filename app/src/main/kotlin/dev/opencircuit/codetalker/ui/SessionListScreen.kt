@@ -515,6 +515,57 @@ fun SessionListScreen(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
+                // 2026-05-21 — global skip pill. Tap to silence whatever
+                // is currently playing AND drain the pending narration
+                // queue so the next line is genuinely fresh (not the
+                // continuation of whatever was already in flight). Real
+                // user need: "I've got it, stop talking" / "wait, that's
+                // wrong — let me jump in." Reuses the same handle.stop
+                // mechanism alert-priority jobs use for overtake.
+                var lastSkipDropped by remember { mutableStateOf<Int?>(null) }
+                var skipInFlight by remember { mutableStateOf(false) }
+                val skipLabel = when {
+                    skipInFlight -> "..."
+                    lastSkipDropped != null && lastSkipDropped!! > 0 ->
+                        "⏭ Skipped ${lastSkipDropped}"
+                    lastSkipDropped == 0 -> "⏭ (nothing)"
+                    else -> "⏭ Skip"
+                }
+                LaunchedEffect(lastSkipDropped) {
+                    if (lastSkipDropped != null) {
+                        // Clear the "Skipped N" pill back to "Skip" after 2s
+                        // so the affordance is ready for the next interrupt.
+                        kotlinx.coroutines.delay(2000)
+                        lastSkipDropped = null
+                    }
+                }
+                Surface(
+                    color = Color(0xFFFB7185).copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .clickable(enabled = !skipInFlight) {
+                            skipInFlight = true
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val (_, dropped) = daemonClient.skipCurrentNarration()
+                                    lastSkipDropped = dropped
+                                } catch (_: Throwable) {
+                                    lastSkipDropped = 0
+                                } finally {
+                                    skipInFlight = false
+                                }
+                            }
+                        },
+                ) {
+                    Text(
+                        skipLabel,
+                        color = Color(0xFFFB7185),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
                 OutlinedButton(onClick = onUnpair) { Text("Unpair") }
             }
         }
