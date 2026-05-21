@@ -696,9 +696,17 @@ fun SessionListScreen(
                                     val thisKey = session.sessionId to mode
                                     val current = activeRecording
                                     if (current == thisKey) {
-                                        // Tapped the active button — stop + dispatch
+                                        // 2026-05-21 — tapping the active button
+                                        // STOPS the recording and transitions to
+                                        // REVIEW. We do NOT clear activeRecording
+                                        // here: the row must keep owning the
+                                        // dictation flow so the REVIEW UI
+                                        // (Send / Re-record / Cancel) renders.
+                                        // activeRecording is cleared by the
+                                        // LaunchedEffect(sttPhase) when the VM
+                                        // returns to IDLE (after Send completes,
+                                        // Cancel fires, or an error bounces).
                                         onHoldEnd()
-                                        activeRecording = null
                                     } else {
                                         // Stop any other active recording first,
                                         // then start this one.
