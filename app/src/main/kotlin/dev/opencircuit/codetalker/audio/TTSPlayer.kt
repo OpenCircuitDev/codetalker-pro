@@ -172,12 +172,6 @@ class TTSPlayer(
         }
     }
 
-    /** Backward-compat entry point. Replaces the entire active set with one sid. */
-    @Deprecated("Use setActiveSessions(setOf(sid)) for multi-active support.")
-    fun playSession(sessionId: String) {
-        setActiveSessions(setOf(sessionId))
-    }
-
     /**
      * 2026-05-16 — force every active poller to be cancelled and respawned
      * with a fresh OkHttp connection pool. Use this when an external signal

@@ -553,6 +553,7 @@ private fun CompanionRoot(
             dev.opencircuit.codetalker.ui.DiagnosticsScreen(
                 daemonClient = client,
                 appPreferences = appPreferences,
+                ttsPlayer = ttsPlayer,
                 onBack = { showingDiagnostics = false },
             )
             return@CompositionLocalProvider

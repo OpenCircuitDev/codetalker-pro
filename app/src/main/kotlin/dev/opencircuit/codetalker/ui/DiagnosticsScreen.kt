@@ -56,6 +56,7 @@ import kotlinx.coroutines.withContext
 fun DiagnosticsScreen(
     daemonClient: DaemonClient,
     appPreferences: AppPreferences,
+    ttsPlayer: dev.opencircuit.codetalker.audio.TTSPlayer,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -66,6 +67,17 @@ fun DiagnosticsScreen(
     var batteryPct by remember { mutableStateOf<Int?>(null) }
     var glassesAttached by remember { mutableStateOf<Boolean?>(null) }
     val activeSessionId by appPreferences.activeSessionId.collectAsState(initial = null)
+    val playerActiveSessions by ttsPlayer.activeSessionIds.collectAsState(initial = emptySet())
+    var audioFocusStatus by remember { mutableStateOf("Idle") }
+
+    // Audio focus state tracking. Updates whenever player's active sessions or playback changes.
+    LaunchedEffect(playerActiveSessions) {
+        audioFocusStatus = when {
+            playerActiveSessions.isEmpty() -> "Idle"
+            ttsPlayer.isPlaying() -> "Playing"
+            else -> "Connected (paused)"
+        }
+    }
 
     // Periodic refresh.
     LaunchedEffect(Unit) {
@@ -90,6 +102,12 @@ fun DiagnosticsScreen(
             batteryPct = readBatteryPct(context)
             // Glasses display detection — heuristic: more than one display id from SurfaceFlinger.
             glassesAttached = withContext(Dispatchers.IO) { detectGlasses(context) }
+            // Update audio focus status on each refresh cycle
+            audioFocusStatus = when {
+                playerActiveSessions.isEmpty() -> "Idle"
+                ttsPlayer.isPlaying() -> "Playing"
+                else -> "Connected (paused)"
+            }
             delay(3_000)
         }
     }
@@ -149,7 +167,7 @@ fun DiagnosticsScreen(
         )
         StatusCard(
             label = "Audio focus",
-            value = "TTSPlayer ready (live wiring in B.5)",
+            value = audioFocusStatus,
         )
         StatusCard(
             label = "Active session id",

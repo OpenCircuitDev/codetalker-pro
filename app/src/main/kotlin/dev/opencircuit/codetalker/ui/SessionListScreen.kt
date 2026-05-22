@@ -300,6 +300,7 @@ fun SessionListScreen(
     //   live             -- recently active AND active_mode == "live"
     //   brief            -- recently active AND active_mode == "brief"
     //   teacher          -- recently active AND active_mode == "teacher" (2026-05-17)
+    //   critical_only    -- recently active AND active_mode == "critical_only" (2026-05-21)
     //   muted            -- recently active AND enabled == false
     //
     // 2026-05-17 — added "teacher" filter. ModePicker has long offered
@@ -316,6 +317,7 @@ fun SessionListScreen(
                 "live" -> (s.activeMode ?: "").equals("live", ignoreCase = true)
                 "brief" -> (s.activeMode ?: "").equals("brief", ignoreCase = true)
                 "teacher" -> (s.activeMode ?: "").equals("teacher", ignoreCase = true)
+                "critical_only" -> (s.activeMode ?: "").equals("critical_only", ignoreCase = true)
                 "muted" -> !s.enabled
                 else -> true
             }
@@ -389,6 +391,7 @@ fun SessionListScreen(
             "live" to active.count { (it.activeMode ?: "").equals("live", ignoreCase = true) },
             "brief" to active.count { (it.activeMode ?: "").equals("brief", ignoreCase = true) },
             "teacher" to active.count { (it.activeMode ?: "").equals("teacher", ignoreCase = true) },
+            "critical_only" to active.count { (it.activeMode ?: "").equals("critical_only", ignoreCase = true) },
             "muted" to active.count { !it.enabled },
         )
     }
@@ -622,7 +625,7 @@ fun SessionListScreen(
             // sessions exist under the "Teacher" pill. Each non-empty
             // peer filter is offered as a one-tap escape.
             val activeCount = counts["active"] ?: 0
-            val peers = listOf("active", "live", "brief", "teacher", "muted")
+            val peers = listOf("active", "live", "brief", "teacher", "critical_only", "muted")
                 .filter { it != filter }
                 .mapNotNull { key ->
                     val n = counts[key] ?: 0
@@ -646,6 +649,7 @@ fun SessionListScreen(
                             "live" -> "Live"
                             "brief" -> "Brief"
                             "teacher" -> "Teacher"
+                            "critical_only" -> "Critical only"
                             "muted" -> "Muted"
                             else -> key
                         }
@@ -819,6 +823,7 @@ private fun FilterChipsRow(
         "live" to "Live",
         "brief" to "Brief",
         "teacher" to "Teacher",
+        "critical_only" to "Critical",
         "muted" to "Muted",
     )
     androidx.compose.foundation.lazy.LazyRow(
@@ -1315,12 +1320,16 @@ private fun ModeQuickPick(current: String?, onChange: (String) -> Unit) {
             .clip(RoundedCornerShape(4.dp))
             .background(Color(0xFF1E2230)),
     ) {
-        listOf("brief", "live").forEach { mode ->
+        listOf("brief", "live", "critical_only").forEach { mode ->
             val selected = current?.lowercase() == mode
             val bg = if (selected) Color(0xFF334155) else Color.Transparent
             val fg = if (selected) Color(0xFFFFFFFF) else Color(0xFF94A3B8)
+            val label = when (mode) {
+                "critical_only" -> "Critical"
+                else -> mode
+            }
             Text(
-                mode,
+                label,
                 color = fg,
                 fontSize = 11.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
@@ -1428,6 +1437,7 @@ private fun SessionStateGlyph(
     val modeColor = when ((mode ?: "").lowercase()) {
         "live" -> Color(0xFF34D399)   // green
         "brief" -> Color(0xFF60A5FA)  // blue
+        "critical_only" -> Color(0xFFEF4444) // red
         "direct" -> Color(0xFFFB923C) // amber
         else -> Color(0xFF94A3B8)
     }
